@@ -1,13 +1,21 @@
-
 import React, { useState, useRef } from 'react';
 import AppHeader from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Camera, MapPin, Mic, Upload, Clock, AlertTriangle, Video, Share2 } from 'lucide-react';
+import { Camera, MapPin, Mic, Upload, Clock, AlertTriangle, Video, Share2, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { api } from '@/services/api';
+
+interface Evidence {
+  id: string;
+  type: 'photo' | 'video' | 'audio' | 'file';
+  url: string;
+  thumbnail?: string;
+}
 
 const Report: React.FC = () => {
   const [reportType, setReportType] = useState<string>('');
@@ -17,6 +25,10 @@ const Report: React.FC = () => {
   const [isVideoRecording, setIsVideoRecording] = useState<boolean>(false);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'audio' | 'video' | 'file' | null>(null);
+  const [evidences, setEvidences] = useState<Evidence[]>([]);
+  const [showCameraPreview, setShowCameraPreview] = useState(false);
+  const [showVideoPreview, setShowVideoPreview] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   
   // References for media capture
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -54,11 +66,19 @@ const Report: React.FC = () => {
     
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // In a real app, we would convert these coordinates to an address using a geocoding API
+        async (position) => {
           const { latitude, longitude } = position.coords;
-          setLocation(`Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}`);
-          toast.success("Location detected!");
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const data = await response.json();
+            setLocation(data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            toast.success("Location detected!");
+          } catch (error) {
+            setLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            toast.success("Location coordinates detected!");
+          }
         },
         (error) => {
           console.error("Error getting location:", error);
@@ -70,48 +90,119 @@ const Report: React.FC = () => {
     }
   };
 
-  const handleTakePhoto = async () => {
+  // Function to initialize camera
+  const initializeCamera = async () => {
     try {
-      // Request camera access
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment' 
-        } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false
       });
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        
-        // Take a photo after a small delay to allow camera to initialize
-        setTimeout(() => {
-          if (videoRef.current) {
-            const canvas = document.createElement('canvas');
-            canvas.width = videoRef.current.videoWidth;
-            canvas.height = videoRef.current.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx?.drawImage(videoRef.current, 0, 0);
-            
-            // Convert the canvas to a data URL
-            const dataUrl = canvas.toDataURL('image/jpeg');
-            setMediaPreview(dataUrl);
-            setMediaType('photo');
-            
-            // Stop the camera stream
-            const tracks = stream.getTracks();
-            tracks.forEach(track => track.stop());
-            if (videoRef.current) videoRef.current.srcObject = null;
-            
-            toast.success("Photo captured!");
-          }
-        }, 500);
+        setCameraStream(stream);
       }
     } catch (error) {
-      console.error("Error accessing camera:", error);
-      toast.error("Could not access camera. Please check permissions.");
+      console.error('Error accessing camera:', error);
+      toast.error('Could not access camera. Please check permissions.');
     }
   };
-  
+
+  // Function to stop camera stream
+  const stopCameraStream = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    setShowCameraPreview(true);
+    await initializeCamera();
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(videoRef.current, 0, 0);
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      
+      setEvidences(prev => [...prev, {
+        id: Date.now().toString(),
+        type: 'photo',
+        url: dataUrl
+      }]);
+      
+      setShowCameraPreview(false);
+      stopCameraStream();
+      toast.success('Photo captured!');
+    }
+  };
+
+  const handleVideoRecording = async () => {
+    setShowVideoPreview(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: true
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setCameraStream(stream);
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      toast.error('Could not access camera. Please check permissions.');
+    }
+  };
+
+  const startVideoRecording = () => {
+    if (cameraStream) {
+      const mediaRecorder = new MediaRecorder(cameraStream);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          mediaChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const videoBlob = new Blob(mediaChunksRef.current, { type: 'video/webm' });
+        const videoUrl = URL.createObjectURL(videoBlob);
+        
+        setEvidences(prev => [...prev, {
+          id: Date.now().toString(),
+          type: 'video',
+          url: videoUrl
+        }]);
+        
+        setShowVideoPreview(false);
+        stopCameraStream();
+        toast.success('Video recorded successfully!');
+      };
+
+      mediaRecorder.start();
+      setIsVideoRecording(true);
+      toast.success('Recording started...');
+    }
+  };
+
+  const stopVideoRecording = () => {
+    if (mediaRecorderRef.current && isVideoRecording) {
+      mediaRecorderRef.current.stop();
+      setIsVideoRecording(false);
+    }
+  };
+
   const handleAudioRecording = async () => {
     if (isRecording) {
       // Stop recording
@@ -155,76 +246,52 @@ const Report: React.FC = () => {
       toast.error("Could not access microphone. Please check permissions.");
     }
   };
-  
-  const handleVideoRecording = async () => {
-    if (isVideoRecording) {
-      // Stop recording
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-        setIsVideoRecording(false);
-        toast.info("Video recording stopped");
-      }
-      return;
-    }
-    
+
+  const handleFileUpload = async (file: File) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: true,
-        video: { 
-          facingMode: 'environment' 
-        } 
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
+      if (file.type.startsWith('video/')) {
+        await api.uploadVideo(file);
+        toast.success('Video uploaded successfully');
+      } else if (file.type.startsWith('audio/')) {
+        await api.uploadAudio(file);
+        toast.success('Audio uploaded successfully');
       }
-      
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      mediaChunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          mediaChunksRef.current.push(e.data);
-        }
-      };
-      
-      mediaRecorder.onstop = () => {
-        const videoBlob = new Blob(mediaChunksRef.current, { type: 'video/webm' });
-        const videoUrl = URL.createObjectURL(videoBlob);
-        setMediaPreview(videoUrl);
-        setMediaType('video');
-        
-        // Stop all video and audio tracks
-        stream.getTracks().forEach(track => track.stop());
-        if (videoRef.current) videoRef.current.srcObject = null;
-      };
-      
-      mediaRecorder.start();
-      setIsVideoRecording(true);
-      toast.success("Video recording started... Press again to stop.");
-      
     } catch (error) {
-      console.error("Error accessing camera/microphone:", error);
-      toast.error("Could not access camera or microphone. Please check permissions.");
+      toast.error('Failed to upload file');
     }
   };
 
-  const handleFileUpload = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
+  const handleTextSubmission = async (text: string) => {
+    try {
+      await api.uploadText(text);
+      toast.success('Report text submitted successfully');
+    } catch (error) {
+      toast.error('Failed to submit report text');
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files) return;
 
-    const fileUrl = URL.createObjectURL(file);
-    setMediaPreview(fileUrl);
-    setMediaType('file');
-    toast.success(`File "${file.name}" uploaded successfully!`);
+    Array.from(files).forEach(file => {
+      const fileUrl = URL.createObjectURL(file);
+      const fileType = file.type.startsWith('image/') ? 'photo' : 
+                      file.type.startsWith('video/') ? 'video' : 
+                      file.type.startsWith('audio/') ? 'audio' : 'file';
+
+      setEvidences(prev => [...prev, {
+        id: Date.now().toString() + Math.random(),
+        type: fileType,
+        url: fileUrl
+      }]);
+    });
+
+    toast.success(`${files.length} file(s) uploaded successfully!`);
+  };
+
+  const removeEvidence = (id: string) => {
+    setEvidences(prev => prev.filter(evidence => evidence.id !== id));
   };
 
   const handleShareLocation = () => {
@@ -265,6 +332,13 @@ const Report: React.FC = () => {
     { id: 'vandalism', label: 'Vandalism', icon: AlertTriangle },
     { id: 'other', label: 'Other', icon: AlertTriangle },
   ];
+
+  // Clean up function
+  React.useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -397,94 +471,92 @@ const Report: React.FC = () => {
               <Button 
                 type="button" 
                 variant="outline" 
-                className={`h-16 flex flex-col items-center justify-center ${mediaType === 'photo' ? 'border-raksha-primary' : ''}`}
+                className="h-16 flex flex-col items-center justify-center"
                 onClick={handleTakePhoto}
               >
                 <Camera size={20} />
                 <span className="text-xs mt-1">Photo</span>
               </Button>
+              
               <Button 
                 type="button" 
                 variant="outline" 
-                className={`h-16 flex flex-col items-center justify-center ${isRecording || mediaType === 'audio' ? 'border-raksha-primary text-raksha-primary' : ''}`}
-                onClick={handleAudioRecording}
-              >
-                <Mic size={20} className={isRecording ? "animate-pulse text-raksha-primary" : ""} />
-                <span className="text-xs mt-1">{isRecording ? "Stop" : "Voice"}</span>
-              </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
-                className={`h-16 flex flex-col items-center justify-center ${isVideoRecording || mediaType === 'video' ? 'border-raksha-primary text-raksha-primary' : ''}`}
+                className="h-16 flex flex-col items-center justify-center"
                 onClick={handleVideoRecording}
               >
-                <Video size={20} className={isVideoRecording ? "animate-pulse text-raksha-primary" : ""} />
-                <span className="text-xs mt-1">{isVideoRecording ? "Stop" : "Video"}</span>
+                <Video size={20} />
+                <span className="text-xs mt-1">Video</span>
               </Button>
+              
               <Button 
                 type="button" 
                 variant="outline" 
-                className={`h-16 flex flex-col items-center justify-center ${mediaType === 'file' ? 'border-raksha-primary' : ''}`}
-                onClick={handleFileUpload}
+                className="h-16 flex flex-col items-center justify-center"
+                onClick={handleAudioRecording}
               >
-                <Upload size={20} />
+                <Mic size={20} />
+                <span className="text-xs mt-1">Voice</span>
+              </Button>
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="h-16 flex flex-col items-center justify-center"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Plus size={20} />
                 <span className="text-xs mt-1">Upload</span>
               </Button>
-              <input 
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                onChange={handleFileChange}
-                accept="image/*,video/*,audio/*"
-              />
             </div>
 
-            {/* Media Preview */}
-            {mediaPreview && (
-              <div className="mt-4 border border-gray-200 rounded-lg p-3">
-                <h3 className="text-sm font-semibold mb-2">Evidence Preview</h3>
-                
-                {mediaType === 'photo' && (
-                  <div className="flex justify-center">
-                    <img src={mediaPreview} alt="Captured" className="max-h-48 rounded" />
-                  </div>
-                )}
-                
-                {mediaType === 'audio' && (
-                  <audio ref={audioRef} src={mediaPreview} controls className="w-full" />
-                )}
-                
-                {mediaType === 'video' && (
-                  <video ref={videoRef} src={mediaPreview} controls className="w-full max-h-48" />
-                )}
+            <input 
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileChange}
+              accept="image/*,video/*,audio/*"
+              multiple // Allow multiple file selection
+            />
 
-                {mediaType === 'file' && (
-                  <div className="flex justify-center items-center p-4">
-                    <p className="text-gray-600">File uploaded successfully</p>
+            {/* Evidence Preview Grid */}
+            {evidences.length > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                {evidences.map((evidence) => (
+                  <div key={evidence.id} className="relative border rounded-lg overflow-hidden">
+                    {evidence.type === 'photo' && (
+                      <img 
+                        src={evidence.url} 
+                        alt="Evidence" 
+                        className="w-full h-40 object-cover"
+                      />
+                    )}
+                    {evidence.type === 'video' && (
+                      <video 
+                        src={evidence.url} 
+                        className="w-full h-40 object-cover" 
+                        controls
+                      />
+                    )}
+                    {evidence.type === 'audio' && (
+                      <audio 
+                        src={evidence.url} 
+                        className="w-full mt-2" 
+                        controls 
+                      />
+                    )}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={() => removeEvidence(evidence.id)}
+                    >
+                      <X size={16} />
+                    </Button>
                   </div>
-                )}
-                
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-2"
-                  onClick={() => {
-                    setMediaPreview(null);
-                    setMediaType(null);
-                  }}
-                >
-                  Remove
-                </Button>
+                ))}
               </div>
             )}
-
-            {/* Hidden video element for camera functionality */}
-            <video 
-              ref={videoRef} 
-              style={{ display: 'none' }} 
-              muted
-            />
           </div>
           
           {/* Submit */}
@@ -504,6 +576,83 @@ const Report: React.FC = () => {
             </div>
           </div>
         </form>
+
+        {/* Camera Preview Dialog */}
+        <Dialog open={showCameraPreview} onOpenChange={(open) => {
+          if (!open) {
+            stopCameraStream();
+          }
+          setShowCameraPreview(open);
+        }}>
+          <DialogContent className="sm:max-w-[600px]">
+            <div className="relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-[400px] object-cover rounded-lg"
+              />
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                <Button
+                  type="button"
+                  onClick={capturePhoto}
+                  className="bg-raksha-primary"
+                >
+                  Capture Photo
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Video Preview Dialog */}
+        <Dialog open={showVideoPreview} onOpenChange={(open) => {
+          if (!open) {
+            stopCameraStream();
+            if (isVideoRecording) {
+              stopVideoRecording();
+            }
+          }
+          setShowVideoPreview(open);
+        }}>
+          <DialogContent className="sm:max-w-[600px]">
+            <div className="relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-[400px] object-cover rounded-lg"
+              />
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-4">
+                {!isVideoRecording ? (
+                  <Button
+                    type="button"
+                    onClick={startVideoRecording}
+                    className="bg-raksha-primary"
+                  >
+                    Start Recording
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={stopVideoRecording}
+                    variant="destructive"
+                  >
+                    Stop Recording
+                  </Button>
+                )}
+              </div>
+              {isVideoRecording && (
+                <div className="absolute top-4 right-4">
+                  <div className="bg-red-500 text-white px-3 py-1 rounded-full flex items-center">
+                    <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
+                    Recording...
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

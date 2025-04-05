@@ -1,11 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import AppHeader from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Calendar, Filter, Layers, MapPin } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Map: React.FC = () => {
   const [filterOpen, setFilterOpen] = useState(false);
+  const navigate = useNavigate();
   
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -138,6 +139,7 @@ const Map: React.FC = () => {
           <Button 
             className="bg-raksha-primary hover:bg-raksha-primary/90 shadow-lg px-8"
             size="lg"
+            onClick={() => navigate('/report')}
           >
             Report Incident
           </Button>

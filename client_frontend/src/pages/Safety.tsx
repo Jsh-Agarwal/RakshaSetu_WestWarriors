@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AppHeader from '@/components/AppHeader';
 import EmergencySOS from '@/components/EmergencySOS';
 import SafetyScore from '@/components/SafetyScore';
@@ -17,6 +16,7 @@ import {
   DialogClose,
   DialogFooter 
 } from '@/components/ui/dialog';
+import { api } from '@/services/api';
 
 // Sample emergency contacts
 const initialContacts = [
@@ -29,6 +29,14 @@ const sharedLocations = [
   { id: '2', name: 'Friend 2', location: 'Lat: 28.5355, Long: 77.2910', time: '15 mins ago' }
 ];
 
+// Add new interfaces
+interface LocationSuggestion {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+}
+
 const Safety: React.FC = () => {
   const [contacts, setContacts] = useState(initialContacts);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -38,26 +46,156 @@ const Safety: React.FC = () => {
   const [destination, setDestination] = useState('');
   const [safetyAnalysis, setSafetyAnalysis] = useState<null | { safe: boolean, reason?: string, alternateRoute?: string }>(null);
   const [currentLocation, setCurrentLocation] = useState('');
+  const [isSearchingContacts, setIsSearchingContacts] = useState(false);
+  const [startLocationSuggestions, setStartLocationSuggestions] = useState<LocationSuggestion[]>([]);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<LocationSuggestion[]>([]);
+  const [showStartSuggestions, setShowStartSuggestions] = useState(false);
+  const [showDestSuggestions, setShowDestSuggestions] = useState(false);
+  const [nearbyHospitals, setNearbyHospitals] = useState<any[]>([]);
+  const [nearbyPoliceStations, setNearbyPoliceStations] = useState<any[]>([]);
+  const [markedLocations, setMarkedLocations] = useState<any[]>([]);
+  
+  // Add refs for click outside handling
+  const startSuggestionsRef = useRef<HTMLDivElement>(null);
+  const destSuggestionsRef = useRef<HTMLDivElement>(null);
 
-  const handleShareLocation = () => {
+  // Handle click outside suggestions
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (startSuggestionsRef.current && !startSuggestionsRef.current.contains(event.target as Node)) {
+        setShowStartSuggestions(false);
+      }
+      if (destSuggestionsRef.current && !destSuggestionsRef.current.contains(event.target as Node)) {
+        setShowDestSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Add function to fetch location suggestions
+  const fetchLocationSuggestions = async (query: string, isStart: boolean) => {
+    if (query.length < 3) {
+      isStart ? setStartLocationSuggestions([]) : setDestinationSuggestions([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+      );
+      const data = await response.json();
+      const suggestions: LocationSuggestion[] = data.map((item: any) => ({
+        place_id: item.place_id,
+        display_name: item.display_name,
+        lat: item.lat,
+        lon: item.lon
+      }));
+
+      if (isStart) {
+        setStartLocationSuggestions(suggestions);
+        setShowStartSuggestions(true);
+      } else {
+        setDestinationSuggestions(suggestions);
+        setShowDestSuggestions(true);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      toast.error('Could not fetch location suggestions');
+    }
+  };
+
+  // Add debounce function
+  const debounce = (func: Function, wait: number) => {
+    let timeout: NodeJS.Timeout;
+    return (...args: any[]) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
+    };
+  };
+
+  // Create debounced search functions
+  const debouncedStartSearch = debounce(
+    (query: string) => fetchLocationSuggestions(query, true),
+    300
+  );
+
+  const debouncedDestSearch = debounce(
+    (query: string) => fetchLocationSuggestions(query, false),
+    300
+  );
+
+  // Add function to fetch emergency services
+  const fetchEmergencyServices = async (latitude: number, longitude: number) => {
+    try {
+      const [hospitals, policeStations] = await Promise.all([
+        api.getNearbyHospitals({ lat: latitude, lng: longitude }),
+        api.getNearbyPoliceStations({ lat: latitude, lng: longitude })
+      ]);
+      
+      setNearbyHospitals(hospitals);
+      setNearbyPoliceStations(policeStations);
+    } catch (error) {
+      console.error("Error fetching emergency services:", error);
+      toast.error("Could not fetch nearby emergency services");
+    }
+  };
+
+  // Add function to fetch marked locations
+  const fetchMarkedLocations = async (latitude: number, longitude: number) => {
+    try {
+      const locations = await api.getMarkedLocations({ lat: latitude, lng: longitude });
+      setMarkedLocations(locations);
+    } catch (error) {
+      console.error("Error fetching marked locations:", error);
+      toast.error("Could not fetch marked locations");
+    }
+  };
+
+  // Update handleShareLocation to also fetch emergency services and marked locations
+  const handleShareLocation = async () => {
     if (selectedContacts.length === 0) {
       toast.error("Please select at least one contact to share your location with");
       return;
     }
 
-    // Get selected contact names for the success message
-    const selectedContactNames = contacts
-      .filter(contact => selectedContacts.includes(contact.id))
-      .map(contact => contact.name);
-
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords;
-          setCurrentLocation(`Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}`);
           
-          // In a real app, this would send the location to a server
-          toast.success(`Location shared with ${selectedContactNames.join(', ')}`);
+          try {
+            // Sync location with backend
+            await api.syncLocation({
+              clientId: "user_id", // Replace with actual user ID
+              location: {
+                lat: latitude,
+                lng: longitude
+              }
+            });
+
+            // Get readable address
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const data = await response.json();
+            setCurrentLocation(data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            
+            // Mark location for safety tracking
+            await api.markLocation({ lat: latitude, lng: longitude });
+
+            // Fetch emergency services and marked locations
+            await Promise.all([
+              fetchEmergencyServices(latitude, longitude),
+              fetchMarkedLocations(latitude, longitude)
+            ]);
+
+            toast.success(`Location shared with ${selectedContacts.length} contacts`);
+          } catch (error) {
+            console.error("Error sharing location:", error);
+            toast.error("Could not share location. Please try again.");
+          }
         },
         (error) => {
           console.error("Error getting location:", error);
@@ -79,6 +217,9 @@ const Safety: React.FC = () => {
     setContacts([...contacts, { ...newContact, id: newId }]);
     setNewContact({ name: '', phone: '' });
     toast.success("Contact added successfully!");
+    
+    // Simulate notification being sent to the contact
+    toast.info(`Notification sent to ${newContact.name} for emergency contact approval`);
   };
 
   const handleUpdateContact = () => {
@@ -106,33 +247,64 @@ const Safety: React.FC = () => {
     }
   };
 
-  const handleCheckRoute = () => {
+  const handleCheckRoute = async () => {
     if (!startLocation || !destination) {
       toast.error("Please enter both start and destination locations");
       return;
     }
 
-    // Simulate route safety analysis
-    setTimeout(() => {
-      // In a real app, this would be an API call to check the safety of the route
-      const randomSafety = Math.random();
-      if (randomSafety > 0.4) {
-        setSafetyAnalysis({
-          safe: true,
-          reason: "Route is generally safe with moderate crime rate."
-        });
+    toast.info("Analyzing route safety...");
+
+    try {
+      // Get coordinates from the selected locations
+      const start = {
+        lat: parseFloat(startLocationSuggestions.find(s => s.display_name === startLocation)?.lat || "0"),
+        lng: parseFloat(startLocationSuggestions.find(s => s.display_name === startLocation)?.lon || "0")
+      };
+
+      const end = {
+        lat: parseFloat(destinationSuggestions.find(s => s.display_name === destination)?.lat || "0"),
+        lng: parseFloat(destinationSuggestions.find(s => s.display_name === destination)?.lon || "0")
+      };
+
+      // Get safest path from API
+      const pathData = await api.getSafestPath(start, end);
+      
+      // Update safety analysis with the response
+      setSafetyAnalysis({
+        safe: pathData.safety > 0.7, // Assuming API returns safety score between 0 and 1
+        reason: pathData.reason || "Route analyzed based on historical data",
+        alternateRoute: pathData.alternateRoute
+      });
+
+      if (pathData.safety > 0.7) {
         toast.success("Route analyzed - Safe to travel");
       } else {
-        setSafetyAnalysis({
-          safe: false,
-          reason: "High crime rate reported in this area recently, especially after dark.",
-          alternateRoute: "Via Outer Ring Road (adds 5 min but safer area)"
-        });
         toast.warning("Caution: Unsafe route detected. Alternative route suggested.");
       }
-    }, 1500);
+    } catch (error) {
+      console.error("Error checking route:", error);
+      toast.error("Could not analyze route safety. Please try again.");
+    }
+  };
 
-    toast.info("Analyzing route safety...");
+  const handleSearchContacts = () => {
+    setIsSearchingContacts(true);
+    
+    // Simulate searching in phone contacts
+    setTimeout(() => {
+      toast.success("3 contacts found from your phone");
+      setIsSearchingContacts(false);
+      
+      // For demo purposes, just add mock contacts
+      const mockContacts = [
+        { id: `${contacts.length + 1}`, name: 'John Smith', phone: '+91 9876543211' },
+        { id: `${contacts.length + 2}`, name: 'Alex Johnson', phone: '+91 9876543222' },
+        { id: `${contacts.length + 3}`, name: 'Sarah Wilson', phone: '+91 9876543233' },
+      ];
+      
+      setContacts([...contacts, ...mockContacts]);
+    }, 2000);
   };
 
   return (
@@ -230,8 +402,32 @@ const Safety: React.FC = () => {
                           onChange={(e) => setNewContact({...newContact, phone: e.target.value})}
                         />
                       </div>
+                      
+                      <div className="pt-4">
+                        <Button 
+                          variant="outline" 
+                          className="w-full flex items-center justify-center"
+                          onClick={handleSearchContacts}
+                          disabled={isSearchingContacts}
+                        >
+                          {isSearchingContacts ? (
+                            <span className="flex items-center">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-raksha-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Searching...
+                            </span>
+                          ) : (
+                            <span>Search from Phone Contacts</span>
+                          )}
+                        </Button>
+                        <p className="text-xs text-gray-500 mt-1 text-center">
+                          This will request access to your contacts
+                        </p>
+                      </div>
                     </div>
-                    <DialogFooter>
+                    <DialogFooter className="space-x-2">
                       <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>
                       </DialogClose>
@@ -245,7 +441,7 @@ const Safety: React.FC = () => {
                 </Dialog>
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-2 pt-4">
                 {contacts.map((contact) => (
                   <div key={contact.id} className="flex items-center justify-between border border-gray-100 rounded-md p-2">
                     <div className="flex items-center">
@@ -312,22 +508,27 @@ const Safety: React.FC = () => {
               Track friends who have shared their location with you
             </p>
             
-            {sharedLocations.length > 0 ? (
+            {markedLocations.length > 0 ? (
               <div className="space-y-3">
-                {sharedLocations.map((contact) => (
-                  <div key={contact.id} className="flex justify-between items-center border border-gray-100 rounded-md p-3">
+                {markedLocations.map((location) => (
+                  <div key={location.id} className="flex justify-between items-center border border-gray-100 rounded-md p-3">
                     <div className="flex items-center">
-                      <UserCircle size={24} className="text-gray-400 mr-2" />
+                      <MapPin size={24} className="text-gray-400 mr-2" />
                       <div>
-                        <span className="text-sm font-medium">{contact.name}</span>
+                        <span className="text-sm font-medium">{location.name || 'Marked Location'}</span>
                         <div className="flex items-center text-xs text-gray-500">
                           <MapPin size={12} className="mr-1" />
-                          {contact.location}
+                          {`${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`}
                         </div>
-                        <span className="text-xs text-gray-400">{contact.time}</span>
+                        <span className="text-xs text-gray-400">{location.timestamp || 'Recently marked'}</span>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm" className="text-xs">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-xs"
+                      onClick={() => window.location.href=`/map?lat=${location.lat}&lng=${location.lng}`}
+                    >
                       View Map
                     </Button>
                   </div>
@@ -336,9 +537,81 @@ const Safety: React.FC = () => {
             ) : (
               <div className="text-center py-6 text-gray-500">
                 <MapPin size={32} className="mx-auto mb-2 text-gray-300" />
-                <p className="text-sm">No active shared locations</p>
+                <p className="text-sm">No marked locations</p>
               </div>
             )}
+          </div>
+        </section>
+        
+        {/* Emergency Services */}
+        <section className="mb-6">
+          <h2 className="text-lg font-semibold mb-3 text-raksha-secondary">Nearby Emergency Services</h2>
+          <div className="space-y-4">
+            {/* Hospitals */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+              <h3 className="text-md font-medium mb-3">Hospitals</h3>
+              {nearbyHospitals.length > 0 ? (
+                <div className="space-y-3">
+                  {nearbyHospitals.map((hospital) => (
+                    <div key={hospital.id} className="flex justify-between items-center border border-gray-100 rounded-md p-3">
+                      <div className="flex items-center">
+                        <div className="text-red-500 mr-2">🏥</div>
+                        <div>
+                          <span className="text-sm font-medium">{hospital.name}</span>
+                          <div className="text-xs text-gray-500">{hospital.distance} km away</div>
+                          <div className="text-xs text-gray-400">{hospital.address}</div>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs"
+                        onClick={() => window.location.href=`/map?lat=${hospital.lat}&lng=${hospital.lng}`}
+                      >
+                        Directions
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  <p className="text-sm">No nearby hospitals found</p>
+                </div>
+              )}
+            </div>
+
+            {/* Police Stations */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+              <h3 className="text-md font-medium mb-3">Police Stations</h3>
+              {nearbyPoliceStations.length > 0 ? (
+                <div className="space-y-3">
+                  {nearbyPoliceStations.map((station) => (
+                    <div key={station.id} className="flex justify-between items-center border border-gray-100 rounded-md p-3">
+                      <div className="flex items-center">
+                        <div className="text-blue-500 mr-2">👮</div>
+                        <div>
+                          <span className="text-sm font-medium">{station.name}</span>
+                          <div className="text-xs text-gray-500">{station.distance} km away</div>
+                          <div className="text-xs text-gray-400">{station.address}</div>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs"
+                        onClick={() => window.location.href=`/map?lat=${station.lat}&lng=${station.lng}`}
+                      >
+                        Directions
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  <p className="text-sm">No nearby police stations found</p>
+                </div>
+              )}
+            </div>
           </div>
         </section>
         
@@ -351,26 +624,61 @@ const Safety: React.FC = () => {
             </p>
             
             <div className="space-y-3 mb-4">
-              <div>
+              <div className="relative">
                 <label className="text-sm font-medium">Starting Point</label>
                 <div className="flex mt-1">
-                  <Input 
-                    placeholder="Enter starting location"
-                    value={startLocation}
-                    onChange={(e) => setStartLocation(e.target.value)}
-                    className="flex-1"
-                  />
+                  <div className="flex-1 relative">
+                    <Input 
+                      placeholder="Enter starting location"
+                      value={startLocation}
+                      onChange={(e) => {
+                        setStartLocation(e.target.value);
+                        debouncedStartSearch(e.target.value);
+                      }}
+                      onFocus={() => setShowStartSuggestions(true)}
+                      className="flex-1"
+                    />
+                    {/* Starting Point Suggestions */}
+                    {showStartSuggestions && startLocationSuggestions.length > 0 && (
+                      <div 
+                        ref={startSuggestionsRef}
+                        className="absolute z-10 w-full bg-white mt-1 rounded-md border border-gray-200 shadow-lg max-h-60 overflow-auto"
+                      >
+                        {startLocationSuggestions.map((suggestion) => (
+                          <div
+                            key={suggestion.place_id}
+                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                            onClick={() => {
+                              setStartLocation(suggestion.display_name);
+                              setShowStartSuggestions(false);
+                            }}
+                          >
+                            <div className="font-medium">{suggestion.display_name.split(',')[0]}</div>
+                            <div className="text-xs text-gray-500">{suggestion.display_name}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <Button 
                     variant="outline" 
                     className="ml-2"
                     onClick={() => {
                       if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
-                          (position) => {
-                            // In a real app, we would use reverse geocoding
+                          async (position) => {
                             const { latitude, longitude } = position.coords;
-                            setStartLocation(`Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
-                            toast.success("Current location set as starting point");
+                            try {
+                              const response = await fetch(
+                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+                              );
+                              const data = await response.json();
+                              setStartLocation(data.display_name);
+                              toast.success("Current location set as starting point");
+                            } catch (error) {
+                              setStartLocation(`Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+                              toast.success("Current location coordinates set");
+                            }
                           },
                           (error) => {
                             toast.error("Could not get your location");
@@ -384,14 +692,41 @@ const Safety: React.FC = () => {
                 </div>
               </div>
               
-              <div>
+              <div className="relative">
                 <label className="text-sm font-medium">Destination</label>
-                <Input 
-                  placeholder="Enter destination"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  className="mt-1"
-                />
+                <div className="relative">
+                  <Input 
+                    placeholder="Enter destination"
+                    value={destination}
+                    onChange={(e) => {
+                      setDestination(e.target.value);
+                      debouncedDestSearch(e.target.value);
+                    }}
+                    onFocus={() => setShowDestSuggestions(true)}
+                    className="mt-1"
+                  />
+                  {/* Destination Suggestions */}
+                  {showDestSuggestions && destinationSuggestions.length > 0 && (
+                    <div 
+                      ref={destSuggestionsRef}
+                      className="absolute z-10 w-full bg-white mt-1 rounded-md border border-gray-200 shadow-lg max-h-60 overflow-auto"
+                    >
+                      {destinationSuggestions.map((suggestion) => (
+                        <div
+                          key={suggestion.place_id}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          onClick={() => {
+                            setDestination(suggestion.display_name);
+                            setShowDestSuggestions(false);
+                          }}
+                        >
+                          <div className="font-medium">{suggestion.display_name.split(',')[0]}</div>
+                          <div className="text-xs text-gray-500">{suggestion.display_name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             
@@ -435,29 +770,6 @@ const Safety: React.FC = () => {
                 )}
               </div>
             )}
-          </div>
-        </section>
-        
-        {/* Safety Features */}
-        <section className="mb-6">
-          <h2 className="text-lg font-semibold mb-3 text-raksha-secondary">Safety Features</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="h-24 flex flex-col items-center justify-center">
-              <Bell size={24} className="mb-2" />
-              <span className="text-sm">Safety Alerts</span>
-            </Button>
-            <Button variant="outline" className="h-24 flex flex-col items-center justify-center">
-              <Route size={24} className="mb-2" />
-              <span className="text-sm">Safe Routes</span>
-            </Button>
-            <Button variant="outline" className="h-24 flex flex-col items-center justify-center">
-              <Share2 size={24} className="mb-2" />
-              <span className="text-sm">Shared Location</span>
-            </Button>
-            <Button variant="outline" className="h-24 flex flex-col items-center justify-center">
-              <AlertCircle size={24} className="mb-2" />
-              <span className="text-sm">Women's Safety</span>
-            </Button>
           </div>
         </section>
         
