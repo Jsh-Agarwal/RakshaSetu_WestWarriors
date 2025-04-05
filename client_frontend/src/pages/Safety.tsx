@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AppHeader from '@/components/AppHeader';
 import EmergencySOS from '@/components/EmergencySOS';
 import SafetyScore from '@/components/SafetyScore';
@@ -28,6 +28,14 @@ const sharedLocations = [
   { id: '2', name: 'Friend 2', location: 'Lat: 28.5355, Long: 77.2910', time: '15 mins ago' }
 ];
 
+// Add new interfaces
+interface LocationSuggestion {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+}
+
 const Safety: React.FC = () => {
   const [contacts, setContacts] = useState(initialContacts);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -38,6 +46,81 @@ const Safety: React.FC = () => {
   const [safetyAnalysis, setSafetyAnalysis] = useState<null | { safe: boolean, reason?: string, alternateRoute?: string }>(null);
   const [currentLocation, setCurrentLocation] = useState('');
   const [isSearchingContacts, setIsSearchingContacts] = useState(false);
+  const [startLocationSuggestions, setStartLocationSuggestions] = useState<LocationSuggestion[]>([]);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<LocationSuggestion[]>([]);
+  const [showStartSuggestions, setShowStartSuggestions] = useState(false);
+  const [showDestSuggestions, setShowDestSuggestions] = useState(false);
+  
+  // Add refs for click outside handling
+  const startSuggestionsRef = useRef<HTMLDivElement>(null);
+  const destSuggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Handle click outside suggestions
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (startSuggestionsRef.current && !startSuggestionsRef.current.contains(event.target as Node)) {
+        setShowStartSuggestions(false);
+      }
+      if (destSuggestionsRef.current && !destSuggestionsRef.current.contains(event.target as Node)) {
+        setShowDestSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Add function to fetch location suggestions
+  const fetchLocationSuggestions = async (query: string, isStart: boolean) => {
+    if (query.length < 3) {
+      isStart ? setStartLocationSuggestions([]) : setDestinationSuggestions([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+      );
+      const data = await response.json();
+      const suggestions: LocationSuggestion[] = data.map((item: any) => ({
+        place_id: item.place_id,
+        display_name: item.display_name,
+        lat: item.lat,
+        lon: item.lon
+      }));
+
+      if (isStart) {
+        setStartLocationSuggestions(suggestions);
+        setShowStartSuggestions(true);
+      } else {
+        setDestinationSuggestions(suggestions);
+        setShowDestSuggestions(true);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      toast.error('Could not fetch location suggestions');
+    }
+  };
+
+  // Add debounce function
+  const debounce = (func: Function, wait: number) => {
+    let timeout: NodeJS.Timeout;
+    return (...args: any[]) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
+    };
+  };
+
+  // Create debounced search functions
+  const debouncedStartSearch = debounce(
+    (query: string) => fetchLocationSuggestions(query, true),
+    300
+  );
+
+  const debouncedDestSearch = debounce(
+    (query: string) => fetchLocationSuggestions(query, false),
+    300
+  );
 
   const handleShareLocation = () => {
     if (selectedContacts.length === 0) {
@@ -45,18 +128,23 @@ const Safety: React.FC = () => {
       return;
     }
 
-    // Get selected contact names for the success message
     const selectedContactNames = contacts
       .filter(contact => selectedContacts.includes(contact.id))
       .map(contact => contact.name);
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords;
-          setCurrentLocation(`Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}`);
-          
-          // In a real app, this would send the location to a server
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const data = await response.json();
+            setCurrentLocation(data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+          } catch (error) {
+            setCurrentLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+          }
           toast.success(`Location shared with ${selectedContactNames.join(', ')}`);
         },
         (error) => {
@@ -402,26 +490,61 @@ const Safety: React.FC = () => {
             </p>
             
             <div className="space-y-3 mb-4">
-              <div>
+              <div className="relative">
                 <label className="text-sm font-medium">Starting Point</label>
                 <div className="flex mt-1">
-                  <Input 
-                    placeholder="Enter starting location"
-                    value={startLocation}
-                    onChange={(e) => setStartLocation(e.target.value)}
-                    className="flex-1"
-                  />
+                  <div className="flex-1 relative">
+                    <Input 
+                      placeholder="Enter starting location"
+                      value={startLocation}
+                      onChange={(e) => {
+                        setStartLocation(e.target.value);
+                        debouncedStartSearch(e.target.value);
+                      }}
+                      onFocus={() => setShowStartSuggestions(true)}
+                      className="flex-1"
+                    />
+                    {/* Starting Point Suggestions */}
+                    {showStartSuggestions && startLocationSuggestions.length > 0 && (
+                      <div 
+                        ref={startSuggestionsRef}
+                        className="absolute z-10 w-full bg-white mt-1 rounded-md border border-gray-200 shadow-lg max-h-60 overflow-auto"
+                      >
+                        {startLocationSuggestions.map((suggestion) => (
+                          <div
+                            key={suggestion.place_id}
+                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                            onClick={() => {
+                              setStartLocation(suggestion.display_name);
+                              setShowStartSuggestions(false);
+                            }}
+                          >
+                            <div className="font-medium">{suggestion.display_name.split(',')[0]}</div>
+                            <div className="text-xs text-gray-500">{suggestion.display_name}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <Button 
                     variant="outline" 
                     className="ml-2"
                     onClick={() => {
                       if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
-                          (position) => {
-                            // In a real app, we would use reverse geocoding
+                          async (position) => {
                             const { latitude, longitude } = position.coords;
-                            setStartLocation(`Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
-                            toast.success("Current location set as starting point");
+                            try {
+                              const response = await fetch(
+                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+                              );
+                              const data = await response.json();
+                              setStartLocation(data.display_name);
+                              toast.success("Current location set as starting point");
+                            } catch (error) {
+                              setStartLocation(`Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+                              toast.success("Current location coordinates set");
+                            }
                           },
                           (error) => {
                             toast.error("Could not get your location");
@@ -435,14 +558,41 @@ const Safety: React.FC = () => {
                 </div>
               </div>
               
-              <div>
+              <div className="relative">
                 <label className="text-sm font-medium">Destination</label>
-                <Input 
-                  placeholder="Enter destination"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  className="mt-1"
-                />
+                <div className="relative">
+                  <Input 
+                    placeholder="Enter destination"
+                    value={destination}
+                    onChange={(e) => {
+                      setDestination(e.target.value);
+                      debouncedDestSearch(e.target.value);
+                    }}
+                    onFocus={() => setShowDestSuggestions(true)}
+                    className="mt-1"
+                  />
+                  {/* Destination Suggestions */}
+                  {showDestSuggestions && destinationSuggestions.length > 0 && (
+                    <div 
+                      ref={destSuggestionsRef}
+                      className="absolute z-10 w-full bg-white mt-1 rounded-md border border-gray-200 shadow-lg max-h-60 overflow-auto"
+                    >
+                      {destinationSuggestions.map((suggestion) => (
+                        <div
+                          key={suggestion.place_id}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          onClick={() => {
+                            setDestination(suggestion.display_name);
+                            setShowDestSuggestions(false);
+                          }}
+                        >
+                          <div className="font-medium">{suggestion.display_name.split(',')[0]}</div>
+                          <div className="text-xs text-gray-500">{suggestion.display_name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             

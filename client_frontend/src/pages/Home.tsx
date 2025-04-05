@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AppHeader from '@/components/AppHeader';
 import SafetyScore from '@/components/SafetyScore';
 import EmergencySOS from '@/components/EmergencySOS';
@@ -7,7 +7,7 @@ import CrimeMapSimple from '@/components/CrimeMapSimple';
 import CrimeCards from '@/components/CrimeCards';
 import SafetyTips from '@/components/SafetyTips';
 import { Button } from '@/components/ui/button';
-import { Shield, AlertTriangle, MapPin, ArrowRight, Navigation } from 'lucide-react';
+import { Shield, AlertTriangle, MapPin, ArrowRight, Navigation, MessageCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import QuickReportForm from '@/components/QuickReportForm';
@@ -15,18 +15,27 @@ import CrimeTrendsChart from '@/components/CrimeTrendsChart';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [trackingLocation, setTrackingLocation] = useState(false);
   const [currentLocation, setCurrentLocation] = useState("Detecting location...");
+  const [userName, setUserName] = useState("");
 
   useEffect(() => {
     // Get current location on component mount
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // In a real app, we would use reverse geocoding here
+        async (position) => {
           const { latitude, longitude } = position.coords;
-          // For now, just show coordinates
-          setCurrentLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+          try {
+            // Use reverse geocoding to get readable address
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const data = await response.json();
+            setCurrentLocation(data.display_name.split(',')[0] || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+          } catch (error) {
+            setCurrentLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+          }
         },
         (error) => {
           console.error("Error getting location:", error);
@@ -35,6 +44,13 @@ const Home: React.FC = () => {
       );
     } else {
       setCurrentLocation("Geolocation not supported");
+    }
+
+    // Get user data from localStorage or your auth system
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      const { name } = JSON.parse(userData);
+      setUserName(name || "User");
     }
   }, []);
 
@@ -74,17 +90,21 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
+    <div className="flex flex-col min-h-screen bg-gray-50 relative">
       <AppHeader title="Home" />
       
       <main className="flex-1 px-4 pb-20 pt-4">
-        {/* Hero section */}
+        {/* Hero section - Updated structure */}
         <section className="mb-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-raksha-secondary">
-              Hello, <span className="text-raksha-primary">UserName</span>
-            </h2>
-            <div className="flex space-x-2">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+            <div>
+              <h2 className="text-2xl font-bold text-raksha-secondary">
+                Hello,
+              </h2>
+              <span className="text-2xl font-bold text-raksha-primary">{userName}</span>
+              <p className="text-gray-600 text-sm mt-1">Stay safe with RakshaSetu</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -94,13 +114,16 @@ const Home: React.FC = () => {
                 <Navigation size={14} className="mr-1" />
                 {trackingLocation ? 'Tracking On' : 'Track Me'}
               </Button>
-              <Button variant="outline" size="sm" className="text-xs border-raksha-primary text-raksha-primary">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs border-raksha-primary text-raksha-primary"
+              >
                 <MapPin size={14} className="mr-1" />
                 {currentLocation}
               </Button>
             </div>
           </div>
-          <p className="text-gray-600 text-sm mt-1">Stay safe with RakshaSetu</p>
         </section>
         
         {/* Quick Report Dialog */}
@@ -139,7 +162,10 @@ const Home: React.FC = () => {
             </Button>
           </div>
           <div onClick={handleViewFullMap} className="cursor-pointer">
-            <CrimeMapSimple className="h-64" />
+            <CrimeMapSimple 
+              className="h-64" 
+              currentLocation={currentLocation}
+            />
           </div>
         </div>
         
@@ -179,6 +205,27 @@ const Home: React.FC = () => {
         
         {/* Safety Tips */}
         <SafetyTips className="mt-6" />
+
+        {/* Update Chatbot Button position to bottom right */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button 
+              className="fixed bottom-20 right-4 rounded-full w-12 h-12 bg-raksha-primary hover:bg-raksha-primary/90 shadow-lg flex items-center justify-center"
+              size="icon"
+            >
+              <MessageCircle size={24} />
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>RakshaSetu Assistant</DialogTitle>
+            </DialogHeader>
+            <div className="h-[400px] overflow-y-auto">
+              {/* Add your chatbot component here */}
+              <p className="text-center text-gray-500">Chatbot interface will be implemented here</p>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

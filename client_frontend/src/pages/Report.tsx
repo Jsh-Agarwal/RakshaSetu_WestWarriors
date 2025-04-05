@@ -65,11 +65,19 @@ const Report: React.FC = () => {
     
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // In a real app, we would convert these coordinates to an address using a geocoding API
+        async (position) => {
           const { latitude, longitude } = position.coords;
-          setLocation(`Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}`);
-          toast.success("Location detected!");
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const data = await response.json();
+            setLocation(data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            toast.success("Location detected!");
+          } catch (error) {
+            setLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            toast.success("Location coordinates detected!");
+          }
         },
         (error) => {
           console.error("Error getting location:", error);

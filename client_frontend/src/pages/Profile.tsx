@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppHeader from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +50,34 @@ const Profile: React.FC = () => {
   const [editData, setEditData] = useState({ ...userData });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
+  const [currentLocation, setCurrentLocation] = useState("Detecting location...");
+  
+  useEffect(() => {
+    // Get current location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          try {
+            // Use reverse geocoding to get readable address
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const data = await response.json();
+            setCurrentLocation(data.display_name.split(',')[0] || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+          } catch (error) {
+            setCurrentLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+          }
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          setCurrentLocation("Location access denied");
+        }
+      );
+    } else {
+      setCurrentLocation("Geolocation not supported");
+    }
+  }, []);
   
   const handleLogout = () => {
     toast.info("Logout functionality would be implemented in a full app");
@@ -77,7 +105,7 @@ const Profile: React.FC = () => {
             <UserCircle size={50} className="text-raksha-secondary" />
           </div>
           <h1 className="text-xl font-bold text-raksha-secondary">{userData.name}</h1>
-          <p className="text-gray-600 text-sm">New Delhi</p>
+          <p className="text-gray-600 text-sm">{currentLocation}</p>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>

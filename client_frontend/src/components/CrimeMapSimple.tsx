@@ -1,10 +1,10 @@
-
 import React, { useState } from 'react';
 import { MapPin, Filter, PlusCircle } from 'lucide-react';
 import { Button } from './ui/button';
 
 interface CrimeMapProps {
   className?: string;
+  currentLocation?: string;
 }
 
 // Mock crime data points
@@ -16,7 +16,7 @@ const mockCrimePoints = [
   { id: 5, lat: '28.72', lng: '77.05', type: 'Theft', severity: 'medium' },
 ];
 
-const CrimeMapSimple: React.FC<CrimeMapProps> = ({ className }) => {
+const CrimeMapSimple: React.FC<CrimeMapProps> = ({ className, currentLocation = "Location not available" }) => {
   const [mapLoaded, setMapLoaded] = useState(true);
   
   return (
@@ -61,7 +61,7 @@ const CrimeMapSimple: React.FC<CrimeMapProps> = ({ className }) => {
           
           <div className="absolute top-3 left-3 right-3 bg-white/90 backdrop-blur-sm rounded-md px-3 py-2 shadow-sm flex items-center">
             <MapPin size={16} className="text-raksha-primary mr-1.5" />
-            <span className="text-sm text-gray-800">New Delhi, India</span>
+            <span className="text-sm text-gray-800">{currentLocation}</span>
           </div>
         </>
       )}
