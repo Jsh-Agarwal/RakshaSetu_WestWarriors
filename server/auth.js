@@ -1,8 +1,8 @@
-const express = require('express');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
-const User = require('./models/UserAuth'); // Import the User model
+import express from 'express';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
+import User from './models/UserAuth.js'; // Note the .js extension
 
 const router = express.Router();
 
@@ -71,7 +71,7 @@ router.get('/protected', authenticateToken, (req, res) => {
   res.json({ message: `Hello ${req.user.username}, you're authorized!` });
 });
 
-module.exports = {
+export {
   router,
   authenticateToken
 };

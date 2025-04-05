@@ -5,7 +5,7 @@ import SafetyScore from '@/components/SafetyScore';
 import SafetyTips from '@/components/SafetyTips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Share2, UserCircle, Bell, Route, Shield, AlertCircle, MapPin, Check } from 'lucide-react';
+import { Share2, UserCircle, Bell, Route, Shield, AlertCircle, MapPin, Check, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
   Dialog, 
@@ -37,6 +37,14 @@ interface LocationSuggestion {
   lon: string;
 }
 
+interface SafetyAnalysis {
+  safe: boolean;
+  reason?: string;
+  alternateRoute?: string;
+  mapImageBase64?: string;
+  pathGeoJSON?: any;
+}
+
 const Safety: React.FC = () => {
   const [contacts, setContacts] = useState(initialContacts);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -44,7 +52,7 @@ const Safety: React.FC = () => {
   const [editingContact, setEditingContact] = useState<{ id: string, name: string, phone: string } | null>(null);
   const [startLocation, setStartLocation] = useState('');
   const [destination, setDestination] = useState('');
-  const [safetyAnalysis, setSafetyAnalysis] = useState<null | { safe: boolean, reason?: string, alternateRoute?: string }>(null);
+  const [safetyAnalysis, setSafetyAnalysis] = useState<SafetyAnalysis | null>(null);
   const [currentLocation, setCurrentLocation] = useState('');
   const [isSearchingContacts, setIsSearchingContacts] = useState(false);
   const [startLocationSuggestions, setStartLocationSuggestions] = useState<LocationSuggestion[]>([]);
@@ -54,6 +62,8 @@ const Safety: React.FC = () => {
   const [nearbyHospitals, setNearbyHospitals] = useState<any[]>([]);
   const [nearbyPoliceStations, setNearbyPoliceStations] = useState<any[]>([]);
   const [markedLocations, setMarkedLocations] = useState<any[]>([]);
+  const [isLoadingRoute, setIsLoadingRoute] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   
   // Add refs for click outside handling
   const startSuggestionsRef = useRef<HTMLDivElement>(null);
@@ -81,6 +91,7 @@ const Safety: React.FC = () => {
       return;
     }
 
+    setIsLoadingSuggestions(true);
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
@@ -103,6 +114,8 @@ const Safety: React.FC = () => {
     } catch (error) {
       console.error('Error fetching suggestions:', error);
       toast.error('Could not fetch location suggestions');
+    } finally {
+      setIsLoadingSuggestions(false);
     }
   };
 
@@ -253,6 +266,7 @@ const Safety: React.FC = () => {
       return;
     }
 
+    setIsLoadingRoute(true);
     toast.info("Analyzing route safety...");
 
     try {
@@ -272,19 +286,22 @@ const Safety: React.FC = () => {
       
       // Update safety analysis with the response
       setSafetyAnalysis({
-        safe: pathData.safety > 0.7, // Assuming API returns safety score between 0 and 1
-        reason: pathData.reason || "Route analyzed based on historical data",
-        alternateRoute: pathData.alternateRoute
+        safe: pathData.pathGeoJSON.properties.length_km < 5, // Example safety criteria
+        reason: `Route length: ${pathData.pathGeoJSON.properties.length_km.toFixed(2)} km`,
+        mapImageBase64: pathData.mapImageBase64,
+        pathGeoJSON: pathData.pathGeoJSON
       });
 
-      if (pathData.safety > 0.7) {
+      if (pathData.pathGeoJSON.properties.length_km < 5) {
         toast.success("Route analyzed - Safe to travel");
       } else {
-        toast.warning("Caution: Unsafe route detected. Alternative route suggested.");
+        toast.warning("Caution: Route may have safety concerns. Check the map for details.");
       }
     } catch (error) {
       console.error("Error checking route:", error);
       toast.error("Could not analyze route safety. Please try again.");
+    } finally {
+      setIsLoadingRoute(false);
     }
   };
 
@@ -305,6 +322,25 @@ const Safety: React.FC = () => {
       
       setContacts([...contacts, ...mockContacts]);
     }, 2000);
+  };
+
+  // Handle destination input change
+  const handleDestinationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDestination(value);
+    debouncedDestSearch(value);
+  };
+
+  // Handle suggestion selection
+  const handleSuggestionSelect = (suggestion: LocationSuggestion) => {
+    setDestination(suggestion.display_name);
+    setShowDestSuggestions(false);
+    // You can store the coordinates for later use
+    const coordinates = {
+      lat: parseFloat(suggestion.lat),
+      lng: parseFloat(suggestion.lon)
+    };
+    console.log('Selected coordinates:', coordinates);
   };
 
   return (
@@ -692,38 +728,25 @@ const Safety: React.FC = () => {
                 </div>
               </div>
               
-              <div className="relative">
+              <div className="relative mb-4">
                 <label className="text-sm font-medium">Destination</label>
                 <div className="relative">
                   <Input 
                     placeholder="Enter destination"
                     value={destination}
-                    onChange={(e) => {
-                      setDestination(e.target.value);
-                      debouncedDestSearch(e.target.value);
-                    }}
+                    onChange={handleDestinationChange}
                     onFocus={() => setShowDestSuggestions(true)}
-                    className="mt-1"
+                    className="mt-1 pl-10"
                   />
-                  {/* Destination Suggestions */}
-                  {showDestSuggestions && destinationSuggestions.length > 0 && (
-                    <div 
-                      ref={destSuggestionsRef}
-                      className="absolute z-10 w-full bg-white mt-1 rounded-md border border-gray-200 shadow-lg max-h-60 overflow-auto"
-                    >
-                      {destinationSuggestions.map((suggestion) => (
-                        <div
-                          key={suggestion.place_id}
-                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                          onClick={() => {
-                            setDestination(suggestion.display_name);
-                            setShowDestSuggestions(false);
-                          }}
-                        >
-                          <div className="font-medium">{suggestion.display_name.split(',')[0]}</div>
-                          <div className="text-xs text-gray-500">{suggestion.display_name}</div>
-                        </div>
-                      ))}
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  
+                  {/* Loading indicator */}
+                  {isLoadingSuggestions && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
                     </div>
                   )}
                 </div>
@@ -733,9 +756,22 @@ const Safety: React.FC = () => {
             <Button 
               className="w-full bg-raksha-primary hover:bg-raksha-primary/90 mb-3"
               onClick={handleCheckRoute}
+              disabled={isLoadingRoute}
             >
-              <Route size={18} className="mr-2" />
-              Check Route Safety
+              {isLoadingRoute ? (
+                <div className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Analyzing Route...
+                </div>
+              ) : (
+                <>
+                  <Route size={18} className="mr-2" />
+                  Check Route Safety
+                </>
+              )}
             </Button>
             
             {safetyAnalysis && (
@@ -750,22 +786,15 @@ const Safety: React.FC = () => {
                     {safetyAnalysis.safe ? 'Safe Route' : 'Caution Advised'}
                   </span>
                 </div>
-                <p className="text-sm text-gray-700">{safetyAnalysis.reason}</p>
+                <p className="text-sm text-gray-700 mb-4">{safetyAnalysis.reason}</p>
                 
-                {!safetyAnalysis.safe && safetyAnalysis.alternateRoute && (
-                  <div className="mt-3 pt-3 border-t border-amber-200">
-                    <div className="flex items-center mb-1">
-                      <Route size={16} className="text-raksha-primary mr-2" />
-                      <span className="font-medium text-sm">Suggested Alternate Route:</span>
-                    </div>
-                    <p className="text-sm text-gray-700">{safetyAnalysis.alternateRoute}</p>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="mt-2 text-xs border-raksha-primary text-raksha-primary"
-                    >
-                      Use This Route
-                    </Button>
+                {safetyAnalysis.mapImageBase64 && (
+                  <div className="mt-4 rounded-lg overflow-hidden border border-gray-200">
+                    <img 
+                      src={`data:image/png;base64,${safetyAnalysis.mapImageBase64}`}
+                      alt="Route Map"
+                      className="w-full h-auto"
+                    />
                   </div>
                 )}
               </div>

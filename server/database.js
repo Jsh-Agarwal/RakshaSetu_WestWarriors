@@ -1,4 +1,4 @@
-const { MongoClient } = require('mongodb');
+import { MongoClient } from 'mongodb';
 
 const uri = 'mongodb+srv://maazmalik2004:abenzene1234@dspace.odk45.mongodb.net/'; // Change as needed
 const dbName = 'rakshasetu';
@@ -47,7 +47,7 @@ async function updateUser(userId, updates) {
     }
 }
 
-module.exports = {
+export {
     createUser,
     updateUser
 };
