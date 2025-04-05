@@ -51,7 +51,7 @@ const CrimeMapSimple: React.FC<CrimeMapProps> = ({ className }) => {
           
           {/* Map controls */}
           <div className="absolute bottom-4 right-4 flex flex-col space-y-2">
-            <Button size="icon" variant="secondary" className="bg-white shadow-md">
+            <Button size="icon" variant="secondary" className="bg-raksha-primary shadow-md">
               <Filter size={18} />
             </Button>
             <Button size="icon" variant="default" className="bg-raksha-primary shadow-md">

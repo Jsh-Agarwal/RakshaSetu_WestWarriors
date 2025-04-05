@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '@/components/AppHeader';
@@ -83,7 +82,7 @@ const Home: React.FC = () => {
         <section className="mb-6">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-raksha-secondary">
-              Hello, <span className="text-raksha-primary">User</span>
+              Hello, <span className="text-raksha-primary">UserName</span>
             </h2>
             <div className="flex space-x-2">
               <Button 
@@ -147,14 +146,14 @@ const Home: React.FC = () => {
         {/* Recent Crime Incidents */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-raksha-secondary">Recent Incidents</h2>
+            {/* <h2 className="text-lg font-semibold text-raksha-secondary">Recent Incidents</h2> */}
             <Button 
               variant="ghost" 
               size="sm" 
               className="text-raksha-primary flex items-center"
               onClick={handleViewAllIncidents}
             >
-              View All <ArrowRight size={16} className="ml-1" />
+              {/* View All <ArrowRight size={16} className="ml-1" /> */}
             </Button>
           </div>
           <CrimeCards limit={2} />
@@ -174,7 +173,7 @@ const Home: React.FC = () => {
             </Button>
           </div>
           <div className="bg-white shadow rounded-lg p-4">
-            <CrimeTrendsChart />
+            <CrimeTrendsChart showOverallTrend={true} />
           </div>
         </div>
         

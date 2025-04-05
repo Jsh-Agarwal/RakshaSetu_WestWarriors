@@ -37,7 +37,7 @@ const EmergencySOS: React.FC<EmergencySOSProps> = ({ className }) => {
       <Button 
         size="lg" 
         onClick={handleSOSClick}
-        className={`${sosActive ? 'animate-pulse bg-red-600 hover:bg-red-700' : 'bg-raksha-primary hover:bg-raksha-primary/90'} rounded-full h-16 mb-3`}
+        className={`${sosActive ? 'animate-pulse bg-red-600 hover:bg-red-700' : 'bg-raksha-primary hover:bg-raksha-primary/90'} rounded-full h-12 mb-3`}
       >
         <AlertCircle className="mr-2" size={24} />
         {sosActive ? "CANCEL SOS" : "EMERGENCY SOS"}

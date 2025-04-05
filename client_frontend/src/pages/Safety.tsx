@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import AppHeader from '@/components/AppHeader';
 import EmergencySOS from '@/components/EmergencySOS';
@@ -38,6 +37,7 @@ const Safety: React.FC = () => {
   const [destination, setDestination] = useState('');
   const [safetyAnalysis, setSafetyAnalysis] = useState<null | { safe: boolean, reason?: string, alternateRoute?: string }>(null);
   const [currentLocation, setCurrentLocation] = useState('');
+  const [isSearchingContacts, setIsSearchingContacts] = useState(false);
 
   const handleShareLocation = () => {
     if (selectedContacts.length === 0) {
@@ -79,6 +79,9 @@ const Safety: React.FC = () => {
     setContacts([...contacts, { ...newContact, id: newId }]);
     setNewContact({ name: '', phone: '' });
     toast.success("Contact added successfully!");
+    
+    // Simulate notification being sent to the contact
+    toast.info(`Notification sent to ${newContact.name} for emergency contact approval`);
   };
 
   const handleUpdateContact = () => {
@@ -133,6 +136,25 @@ const Safety: React.FC = () => {
     }, 1500);
 
     toast.info("Analyzing route safety...");
+  };
+
+  const handleSearchContacts = () => {
+    setIsSearchingContacts(true);
+    
+    // Simulate searching in phone contacts
+    setTimeout(() => {
+      toast.success("3 contacts found from your phone");
+      setIsSearchingContacts(false);
+      
+      // For demo purposes, just add mock contacts
+      const mockContacts = [
+        { id: `${contacts.length + 1}`, name: 'John Smith', phone: '+91 9876543211' },
+        { id: `${contacts.length + 2}`, name: 'Alex Johnson', phone: '+91 9876543222' },
+        { id: `${contacts.length + 3}`, name: 'Sarah Wilson', phone: '+91 9876543233' },
+      ];
+      
+      setContacts([...contacts, ...mockContacts]);
+    }, 2000);
   };
 
   return (
@@ -230,8 +252,32 @@ const Safety: React.FC = () => {
                           onChange={(e) => setNewContact({...newContact, phone: e.target.value})}
                         />
                       </div>
+                      
+                      <div className="pt-4">
+                        <Button 
+                          variant="outline" 
+                          className="w-full flex items-center justify-center"
+                          onClick={handleSearchContacts}
+                          disabled={isSearchingContacts}
+                        >
+                          {isSearchingContacts ? (
+                            <span className="flex items-center">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-raksha-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Searching...
+                            </span>
+                          ) : (
+                            <span>Search from Phone Contacts</span>
+                          )}
+                        </Button>
+                        <p className="text-xs text-gray-500 mt-1 text-center">
+                          This will request access to your contacts
+                        </p>
+                      </div>
                     </div>
-                    <DialogFooter>
+                    <DialogFooter className="space-x-2">
                       <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>
                       </DialogClose>
@@ -245,7 +291,7 @@ const Safety: React.FC = () => {
                 </Dialog>
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-2 pt-4">
                 {contacts.map((contact) => (
                   <div key={contact.id} className="flex items-center justify-between border border-gray-100 rounded-md p-2">
                     <div className="flex items-center">
@@ -327,7 +373,12 @@ const Safety: React.FC = () => {
                         <span className="text-xs text-gray-400">{contact.time}</span>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm" className="text-xs">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-xs"
+                      onClick={() => window.location.href="/map"}
+                    >
                       View Map
                     </Button>
                   </div>
@@ -435,29 +486,6 @@ const Safety: React.FC = () => {
                 )}
               </div>
             )}
-          </div>
-        </section>
-        
-        {/* Safety Features */}
-        <section className="mb-6">
-          <h2 className="text-lg font-semibold mb-3 text-raksha-secondary">Safety Features</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="h-24 flex flex-col items-center justify-center">
-              <Bell size={24} className="mb-2" />
-              <span className="text-sm">Safety Alerts</span>
-            </Button>
-            <Button variant="outline" className="h-24 flex flex-col items-center justify-center">
-              <Route size={24} className="mb-2" />
-              <span className="text-sm">Safe Routes</span>
-            </Button>
-            <Button variant="outline" className="h-24 flex flex-col items-center justify-center">
-              <Share2 size={24} className="mb-2" />
-              <span className="text-sm">Shared Location</span>
-            </Button>
-            <Button variant="outline" className="h-24 flex flex-col items-center justify-center">
-              <AlertCircle size={24} className="mb-2" />
-              <span className="text-sm">Women's Safety</span>
-            </Button>
           </div>
         </section>
         
