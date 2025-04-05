@@ -410,3 +410,199 @@ function get(filePath) {
     const result =await getSafestPath(start, end)
     res.send(result)
   });
+
+  // async function getPatrollingRoute(myLocation) {
+  //   // 1. Load crime locations from file
+  //   const crimeData = JSON.parse(fs.readFileSync('crimeLocations.json', 'utf-8'));
+  //   const crimePoints = crimeData.locations;
+  
+  //   if (!myLocation || !myLocation.location) throw new Error("Invalid current location");
+  //   const start = myLocation.location;
+  //   if (crimePoints.length === 0) throw new Error("No crime locations found.");
+  
+  //   // 2. Greedy nearest-neighbor path starting from my location
+  //   const visited = new Set();
+  //   const route = [start];
+  //   let current = start;
+  
+  //   while (visited.size < crimePoints.length) {
+  //     let nearestIdx = -1;
+  //     let minDist = Infinity;
+  //     for (let i = 0; i < crimePoints.length; i++) {
+  //       if (visited.has(i)) continue;
+  //       const dist = turf.distance(
+  //         [current.lng, current.lat],
+  //         [crimePoints[i].lng, crimePoints[i].lat]
+  //       );
+  //       if (dist < minDist) {
+  //         minDist = dist;
+  //         nearestIdx = i;
+  //       }
+  //     }
+  //     current = crimePoints[nearestIdx];
+  //     visited.add(nearestIdx);
+  //     route.push(current);
+  //   }
+  
+  //   // 3. Optional: return to starting point (close loop)
+  //   route.push(start);
+  
+  //   // 4. Encode path for Google Maps Static API
+  //   const encodedPath = polyline.encode(route.map(p => [p.lat, p.lng]));
+  
+  //   const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=800x800&path=color:0x0000ff|weight:5|enc:${encodedPath}` +
+  //     crimePoints.map(z => `&markers=color:red|label:C|${z.lat},${z.lng}`).join('') +
+  //     `&markers=color:green|label:U|${start.lat},${start.lng}` +
+  //     `&key=${process.env.MAPS_API_KEY}`;
+  
+  //   const imageRes = await axios.get(mapUrl, { responseType: "arraybuffer" });
+  //   const base64Image = Buffer.from(imageRes.data).toString("base64");
+  
+  //   // 5. Return route + visual
+  //   return {
+  //     patrollingMapBase64: base64Image,
+  //     routeGeoJSON: {
+  //       type: "Feature",
+  //       geometry: {
+  //         type: "LineString",
+  //         coordinates: route.map(p => [p.lng, p.lat])
+  //       },
+  //       properties: {
+  //         length_km: turf.length({
+  //           type: "Feature",
+  //           geometry: {
+  //             type: "LineString",
+  //             coordinates: route.map(p => [p.lng, p.lat])
+  //           }
+  //         })
+  //       }
+  //     }
+  //   };
+  // }
+
+  async function getPatrollingRoute(myLocation) {
+    // 1. Validate input
+    if (!myLocation || !myLocation.location)
+      throw new Error("Invalid current location");
+  
+    const start = myLocation.location;
+  
+    // 2. Load and filter crime locations within 3 km
+    const crimeData = JSON.parse(fs.readFileSync('crimeLocations.json', 'utf-8'));
+    const crimePoints = crimeData.locations.filter(point => {
+      const distance = turf.distance(
+        [start.lng, start.lat],
+        [point.lng, point.lat]
+      );
+      return distance <= 3; // keep only crimes within 3km
+    });
+  
+    if (crimePoints.length === 0)
+      throw new Error("No nearby crime locations within 3 km found.");
+  
+    // 3. Nearest Neighbor Path Starting from My Location
+    const visited = new Set();
+    const route = [start];
+    let current = start;
+  
+    while (visited.size < crimePoints.length) {
+      let nearestIdx = -1;
+      let minDist = Infinity;
+  
+      for (let i = 0; i < crimePoints.length; i++) {
+        if (visited.has(i)) continue;
+        const dist = turf.distance(
+          [current.lng, current.lat],
+          [crimePoints[i].lng, crimePoints[i].lat]
+        );
+        if (dist < minDist) {
+          minDist = dist;
+          nearestIdx = i;
+        }
+      }
+  
+      current = crimePoints[nearestIdx];
+      visited.add(nearestIdx);
+      route.push(current);
+    }
+  
+    // 4. Optionally return to start to close the loop
+    route.push(start);
+  
+    // 5. Create Google Static Map
+    const encodedPath = polyline.encode(route.map(p => [p.lat, p.lng]));
+    const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=800x800&path=color:0x0000ff|weight:5|enc:${encodedPath}` +
+      crimePoints.map(z => `&markers=color:red|label:C|${z.lat},${z.lng}`).join('') +
+      `&markers=color:green|label:U|${start.lat},${start.lng}` +
+      `&key=${process.env.MAPS_API_KEY}`;
+  
+    const imageRes = await axios.get(mapUrl, { responseType: "arraybuffer" });
+    const base64Image = Buffer.from(imageRes.data).toString("base64");
+  
+    // 6. Return results
+    return {
+      patrollingMapBase64: base64Image,
+      routeGeoJSON: {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: route.map(p => [p.lng, p.lat])
+        },
+        properties: {
+          length_km: turf.length({
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: route.map(p => [p.lng, p.lat])
+            }
+          })
+        }
+      }
+    };
+  }
+
+
+  // app.post("/find-patrolling-path", async(req, res)=>{
+  //   const myLocation = req.body.location;
+
+  //   const result =await getPatrollingRoute(myLocation.location)
+  //   res.send(result)
+  // });
+  app.post("/find-patrolling-path", async (req, res) => {
+    try {
+      const myLocation = req.body; // req.body = { location: { lat, lng } }
+  
+      const result = await getPatrollingRoute(myLocation); // Pass entire object with .location
+      res.send(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ error: err.message });
+    }
+  });
+  
+  app.post("/add-soss", async(req, res)=>{
+    try{
+      const sos = req.body.sos;
+      const soss = get("soss.json");
+      soss.soss.push(sos);
+      set("soss.json",soss);
+      res.send("soss sent successfully")
+    }catch(error){
+      console.error(error);
+      res.status(500).send({
+        error:error.message
+      })
+    }
+  })
+
+  app.get("/get-soss", async(req, res)=>{
+    try{
+      const soss = get("soss.json");
+      res.json(soss)
+    }catch(error){
+      console.error(error);
+      res.status(500).send({
+        error:error.message
+      })
+    }
+  })
