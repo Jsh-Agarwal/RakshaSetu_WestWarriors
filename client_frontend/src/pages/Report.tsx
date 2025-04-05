@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { api } from '@/services/api';
 
 interface Evidence {
   id: string;
@@ -246,9 +247,26 @@ const Report: React.FC = () => {
     }
   };
 
-  const handleFileUpload = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
+  const handleFileUpload = async (file: File) => {
+    try {
+      if (file.type.startsWith('video/')) {
+        await api.uploadVideo(file);
+        toast.success('Video uploaded successfully');
+      } else if (file.type.startsWith('audio/')) {
+        await api.uploadAudio(file);
+        toast.success('Audio uploaded successfully');
+      }
+    } catch (error) {
+      toast.error('Failed to upload file');
+    }
+  };
+
+  const handleTextSubmission = async (text: string) => {
+    try {
+      await api.uploadText(text);
+      toast.success('Report text submitted successfully');
+    } catch (error) {
+      toast.error('Failed to submit report text');
     }
   };
 
@@ -484,7 +502,7 @@ const Report: React.FC = () => {
                 type="button" 
                 variant="outline" 
                 className="h-16 flex flex-col items-center justify-center"
-                onClick={handleFileUpload}
+                onClick={() => fileInputRef.current?.click()}
               >
                 <Plus size={20} />
                 <span className="text-xs mt-1">Upload</span>

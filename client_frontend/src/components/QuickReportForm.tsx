@@ -4,11 +4,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Camera, Mic, Video, AlertTriangle, X, Plus } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { api } from '@/services/api';
 
 interface Evidence {
   id: string;
   type: 'photo' | 'video' | 'audio';
   url: string;
+  blob?: Blob;
 }
 
 const QuickReportForm: React.FC = () => {
@@ -26,7 +28,7 @@ const QuickReportForm: React.FC = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaChunksRef = useRef<Blob[]>([]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!reportType) {
@@ -38,12 +40,39 @@ const QuickReportForm: React.FC = () => {
       toast.error("Please provide either a description or evidence");
       return;
     }
-    
-    toast.success("Quick report submitted successfully!");
-    // Reset form
-    setReportType('');
-    setDescription('');
-    setEvidences([]);
+
+    try {
+      // Upload text description if provided
+      if (description) {
+        await api.uploadText(description);
+      }
+
+      // Upload all evidence files
+      const uploadPromises = evidences.map(async (evidence) => {
+        if (!evidence.blob) return;
+
+        const file = new File([evidence.blob], `${evidence.type}_${Date.now()}.${evidence.type === 'video' ? 'webm' : evidence.type === 'audio' ? 'wav' : 'jpg'}`, {
+          type: evidence.type === 'video' ? 'video/webm' : evidence.type === 'audio' ? 'audio/wav' : 'image/jpeg'
+        });
+
+        if (evidence.type === 'video') {
+          await api.uploadVideo(file);
+        } else if (evidence.type === 'audio') {
+          await api.uploadAudio(file);
+        }
+      });
+
+      await Promise.all(uploadPromises);
+      
+      toast.success("Quick report submitted successfully!");
+      // Reset form
+      setReportType('');
+      setDescription('');
+      setEvidences([]);
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      toast.error("Failed to submit report. Please try again.");
+    }
   };
 
   // Camera functions
@@ -86,13 +115,19 @@ const QuickReportForm: React.FC = () => {
       canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(videoRef.current, 0, 0);
-      const dataUrl = canvas.toDataURL('image/jpeg');
       
-      setEvidences(prev => [...prev, {
-        id: Date.now().toString(),
-        type: 'photo',
-        url: dataUrl
-      }]);
+      // Get both the data URL and the blob
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      canvas.toBlob((blob) => {
+        if (blob) {
+          setEvidences(prev => [...prev, {
+            id: Date.now().toString(),
+            type: 'photo',
+            url: dataUrl,
+            blob: blob
+          }]);
+        }
+      }, 'image/jpeg');
       
       setShowCameraPreview(false);
       stopCameraStream();
@@ -138,7 +173,8 @@ const QuickReportForm: React.FC = () => {
         setEvidences(prev => [...prev, {
           id: Date.now().toString(),
           type: 'video',
-          url: videoUrl
+          url: videoUrl,
+          blob: videoBlob
         }]);
         
         setShowVideoPreview(false);
@@ -189,7 +225,8 @@ const QuickReportForm: React.FC = () => {
         setEvidences(prev => [...prev, {
           id: Date.now().toString(),
           type: 'audio',
-          url: audioUrl
+          url: audioUrl,
+          blob: audioBlob
         }]);
         
         stream.getTracks().forEach(track => track.stop());

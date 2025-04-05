@@ -16,6 +16,7 @@ import {
   DialogClose,
   DialogFooter 
 } from '@/components/ui/dialog';
+import { api } from '@/services/api';
 
 // Sample emergency contacts
 const initialContacts = [
@@ -50,6 +51,9 @@ const Safety: React.FC = () => {
   const [destinationSuggestions, setDestinationSuggestions] = useState<LocationSuggestion[]>([]);
   const [showStartSuggestions, setShowStartSuggestions] = useState(false);
   const [showDestSuggestions, setShowDestSuggestions] = useState(false);
+  const [nearbyHospitals, setNearbyHospitals] = useState<any[]>([]);
+  const [nearbyPoliceStations, setNearbyPoliceStations] = useState<any[]>([]);
+  const [markedLocations, setMarkedLocations] = useState<any[]>([]);
   
   // Add refs for click outside handling
   const startSuggestionsRef = useRef<HTMLDivElement>(null);
@@ -122,30 +126,76 @@ const Safety: React.FC = () => {
     300
   );
 
-  const handleShareLocation = () => {
+  // Add function to fetch emergency services
+  const fetchEmergencyServices = async (latitude: number, longitude: number) => {
+    try {
+      const [hospitals, policeStations] = await Promise.all([
+        api.getNearbyHospitals({ lat: latitude, lng: longitude }),
+        api.getNearbyPoliceStations({ lat: latitude, lng: longitude })
+      ]);
+      
+      setNearbyHospitals(hospitals);
+      setNearbyPoliceStations(policeStations);
+    } catch (error) {
+      console.error("Error fetching emergency services:", error);
+      toast.error("Could not fetch nearby emergency services");
+    }
+  };
+
+  // Add function to fetch marked locations
+  const fetchMarkedLocations = async (latitude: number, longitude: number) => {
+    try {
+      const locations = await api.getMarkedLocations({ lat: latitude, lng: longitude });
+      setMarkedLocations(locations);
+    } catch (error) {
+      console.error("Error fetching marked locations:", error);
+      toast.error("Could not fetch marked locations");
+    }
+  };
+
+  // Update handleShareLocation to also fetch emergency services and marked locations
+  const handleShareLocation = async () => {
     if (selectedContacts.length === 0) {
       toast.error("Please select at least one contact to share your location with");
       return;
     }
 
-    const selectedContactNames = contacts
-      .filter(contact => selectedContacts.includes(contact.id))
-      .map(contact => contact.name);
-
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
+          
           try {
+            // Sync location with backend
+            await api.syncLocation({
+              clientId: "user_id", // Replace with actual user ID
+              location: {
+                lat: latitude,
+                lng: longitude
+              }
+            });
+
+            // Get readable address
             const response = await fetch(
               `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
             );
             const data = await response.json();
             setCurrentLocation(data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            
+            // Mark location for safety tracking
+            await api.markLocation({ lat: latitude, lng: longitude });
+
+            // Fetch emergency services and marked locations
+            await Promise.all([
+              fetchEmergencyServices(latitude, longitude),
+              fetchMarkedLocations(latitude, longitude)
+            ]);
+
+            toast.success(`Location shared with ${selectedContacts.length} contacts`);
           } catch (error) {
-            setCurrentLocation(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            console.error("Error sharing location:", error);
+            toast.error("Could not share location. Please try again.");
           }
-          toast.success(`Location shared with ${selectedContactNames.join(', ')}`);
         },
         (error) => {
           console.error("Error getting location:", error);
@@ -197,33 +247,45 @@ const Safety: React.FC = () => {
     }
   };
 
-  const handleCheckRoute = () => {
+  const handleCheckRoute = async () => {
     if (!startLocation || !destination) {
       toast.error("Please enter both start and destination locations");
       return;
     }
 
-    // Simulate route safety analysis
-    setTimeout(() => {
-      // In a real app, this would be an API call to check the safety of the route
-      const randomSafety = Math.random();
-      if (randomSafety > 0.4) {
-        setSafetyAnalysis({
-          safe: true,
-          reason: "Route is generally safe with moderate crime rate."
-        });
+    toast.info("Analyzing route safety...");
+
+    try {
+      // Get coordinates from the selected locations
+      const start = {
+        lat: parseFloat(startLocationSuggestions.find(s => s.display_name === startLocation)?.lat || "0"),
+        lng: parseFloat(startLocationSuggestions.find(s => s.display_name === startLocation)?.lon || "0")
+      };
+
+      const end = {
+        lat: parseFloat(destinationSuggestions.find(s => s.display_name === destination)?.lat || "0"),
+        lng: parseFloat(destinationSuggestions.find(s => s.display_name === destination)?.lon || "0")
+      };
+
+      // Get safest path from API
+      const pathData = await api.getSafestPath(start, end);
+      
+      // Update safety analysis with the response
+      setSafetyAnalysis({
+        safe: pathData.safety > 0.7, // Assuming API returns safety score between 0 and 1
+        reason: pathData.reason || "Route analyzed based on historical data",
+        alternateRoute: pathData.alternateRoute
+      });
+
+      if (pathData.safety > 0.7) {
         toast.success("Route analyzed - Safe to travel");
       } else {
-        setSafetyAnalysis({
-          safe: false,
-          reason: "High crime rate reported in this area recently, especially after dark.",
-          alternateRoute: "Via Outer Ring Road (adds 5 min but safer area)"
-        });
         toast.warning("Caution: Unsafe route detected. Alternative route suggested.");
       }
-    }, 1500);
-
-    toast.info("Analyzing route safety...");
+    } catch (error) {
+      console.error("Error checking route:", error);
+      toast.error("Could not analyze route safety. Please try again.");
+    }
   };
 
   const handleSearchContacts = () => {
@@ -446,26 +508,26 @@ const Safety: React.FC = () => {
               Track friends who have shared their location with you
             </p>
             
-            {sharedLocations.length > 0 ? (
+            {markedLocations.length > 0 ? (
               <div className="space-y-3">
-                {sharedLocations.map((contact) => (
-                  <div key={contact.id} className="flex justify-between items-center border border-gray-100 rounded-md p-3">
+                {markedLocations.map((location) => (
+                  <div key={location.id} className="flex justify-between items-center border border-gray-100 rounded-md p-3">
                     <div className="flex items-center">
-                      <UserCircle size={24} className="text-gray-400 mr-2" />
+                      <MapPin size={24} className="text-gray-400 mr-2" />
                       <div>
-                        <span className="text-sm font-medium">{contact.name}</span>
+                        <span className="text-sm font-medium">{location.name || 'Marked Location'}</span>
                         <div className="flex items-center text-xs text-gray-500">
                           <MapPin size={12} className="mr-1" />
-                          {contact.location}
+                          {`${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`}
                         </div>
-                        <span className="text-xs text-gray-400">{contact.time}</span>
+                        <span className="text-xs text-gray-400">{location.timestamp || 'Recently marked'}</span>
                       </div>
                     </div>
                     <Button 
                       variant="outline" 
                       size="sm" 
                       className="text-xs"
-                      onClick={() => window.location.href="/map"}
+                      onClick={() => window.location.href=`/map?lat=${location.lat}&lng=${location.lng}`}
                     >
                       View Map
                     </Button>
@@ -475,9 +537,81 @@ const Safety: React.FC = () => {
             ) : (
               <div className="text-center py-6 text-gray-500">
                 <MapPin size={32} className="mx-auto mb-2 text-gray-300" />
-                <p className="text-sm">No active shared locations</p>
+                <p className="text-sm">No marked locations</p>
               </div>
             )}
+          </div>
+        </section>
+        
+        {/* Emergency Services */}
+        <section className="mb-6">
+          <h2 className="text-lg font-semibold mb-3 text-raksha-secondary">Nearby Emergency Services</h2>
+          <div className="space-y-4">
+            {/* Hospitals */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+              <h3 className="text-md font-medium mb-3">Hospitals</h3>
+              {nearbyHospitals.length > 0 ? (
+                <div className="space-y-3">
+                  {nearbyHospitals.map((hospital) => (
+                    <div key={hospital.id} className="flex justify-between items-center border border-gray-100 rounded-md p-3">
+                      <div className="flex items-center">
+                        <div className="text-red-500 mr-2">🏥</div>
+                        <div>
+                          <span className="text-sm font-medium">{hospital.name}</span>
+                          <div className="text-xs text-gray-500">{hospital.distance} km away</div>
+                          <div className="text-xs text-gray-400">{hospital.address}</div>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs"
+                        onClick={() => window.location.href=`/map?lat=${hospital.lat}&lng=${hospital.lng}`}
+                      >
+                        Directions
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  <p className="text-sm">No nearby hospitals found</p>
+                </div>
+              )}
+            </div>
+
+            {/* Police Stations */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+              <h3 className="text-md font-medium mb-3">Police Stations</h3>
+              {nearbyPoliceStations.length > 0 ? (
+                <div className="space-y-3">
+                  {nearbyPoliceStations.map((station) => (
+                    <div key={station.id} className="flex justify-between items-center border border-gray-100 rounded-md p-3">
+                      <div className="flex items-center">
+                        <div className="text-blue-500 mr-2">👮</div>
+                        <div>
+                          <span className="text-sm font-medium">{station.name}</span>
+                          <div className="text-xs text-gray-500">{station.distance} km away</div>
+                          <div className="text-xs text-gray-400">{station.address}</div>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs"
+                        onClick={() => window.location.href=`/map?lat=${station.lat}&lng=${station.lng}`}
+                      >
+                        Directions
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  <p className="text-sm">No nearby police stations found</p>
+                </div>
+              )}
+            </div>
           </div>
         </section>
         
