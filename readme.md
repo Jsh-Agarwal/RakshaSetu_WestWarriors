@@ -9,3 +9,9 @@ Real Time Incident Maps:
 
 Real Time Nearest Emergency contacts:
 ![WhatsApp Image 2025-04-06 at 10 23 50_acc7bfa2](https://github.com/user-attachments/assets/c422d80d-0d80-44df-84c1-4240c3bb31df)
+
+Safest Shortest Path:
+![WhatsApp Image 2025-04-06 at 10 31 12_4fcca009](https://github.com/user-attachments/assets/2a3901f4-4fde-497f-a4bf-2c0e6cfdfdb6)
+
+Police Patroling Path:
+![WhatsApp Image 2025-04-06 at 10 32 08_90f2e40a](https://github.com/user-attachments/assets/776b53fe-6bc0-4d58-8c40-754434d672a0)
