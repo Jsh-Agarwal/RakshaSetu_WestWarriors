@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import AppHeader from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+const API_BASE_URL = 'http://127.0.0.1:5000';
 import { Separator } from '@/components/ui/separator';
 import { 
   LogOut, 
@@ -33,11 +34,14 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Sample reported incidents
+// Update with a real report ID from your database
+const SAMPLE_REPORT_ID = '65720f851234567890123456';
+
+// Sample reported incidents - Keep these for demo purposes
 const reportedIncidents = [
-  { id: 1, type: 'Theft', location: 'Central Market', date: '12 May 2023', status: 'Verified' },
-  { id: 2, type: 'Accident', location: 'Highway Junction', date: '5 Apr 2023', status: 'Under Investigation' },
-  { id: 3, type: 'Suspicious', location: 'Residential Block C', date: '28 Feb 2023', status: 'Resolved' },
+  { id: '65720f851234567890123456', type: 'Theft', location: 'Central Market', date: '12 May 2023', status: 'Verified' },
+  { id: '65720f851234567890123457', type: 'Accident', location: 'Highway Junction', date: '5 Apr 2023', status: 'Under Investigation' },
+  { id: '65720f851234567890123458', type: 'Suspicious', location: 'Residential Block C', date: '28 Feb 2023', status: 'Resolved' },
 ];
 
 const Profile: React.FC = () => {
@@ -54,6 +58,9 @@ const Profile: React.FC = () => {
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
   const [currentLocation, setCurrentLocation] = useState("Detecting location...");
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [reportDetails, setReportDetails] = useState<any>(null);
+  const [userReports, setUserReports] = useState<any[]>([]);
   
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -99,6 +106,49 @@ const Profile: React.FC = () => {
     }
   }, []);
   
+  useEffect(() => {
+    const fetchAllReports = async () => {
+      try {
+        // Get reports from localStorage
+        const savedReports = JSON.parse(localStorage.getItem('userReports') || '[]');
+        
+        // Combine sample reports with saved reports
+        const combinedReports = [...reportedIncidents, ...savedReports];
+        
+        // Fetch details for each report
+        const reportsWithDetails = await Promise.all(
+          combinedReports.map(async (report: any) => {
+            if (report.id.startsWith('657')) {
+              // This is a sample report, return as is
+              return report;
+            }
+            
+            try {
+              const response = await fetch(`${API_BASE_URL}/reports/${report.id}`);
+              if (!response.ok) throw new Error('Failed to fetch report');
+              const data = await response.json();
+              return {
+                ...report,
+                ...data,
+                date: new Date(data.timestamp).toLocaleDateString(),
+              };
+            } catch (error) {
+              console.error(`Error fetching report ${report.id}:`, error);
+              return report;
+            }
+          })
+        );
+
+        setUserReports(reportsWithDetails);
+      } catch (error) {
+        console.error('Error fetching user reports:', error);
+        toast.error('Failed to load reports');
+      }
+    };
+
+    fetchAllReports();
+  }, []);
+  
   const handleLogout = async () => {
     try {
       // Clear all auth-related data
@@ -130,6 +180,29 @@ const Profile: React.FC = () => {
       console.error('Error updating profile:', error);
       toast.error('Failed to update profile');
     }
+  };
+
+  const fetchReportDetails = async (reportId: string) => {
+    setIsLoadingDetails(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/reports/${reportId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch report details');
+      }
+      const data = await response.json();
+      setReportDetails(data);
+      setSelectedIncident({ ...reportDetails, ...data });
+    } catch (error) {
+      console.error('Error fetching report details:', error);
+      toast.error('Failed to load report details');
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
+
+  const handleViewDetails = (incident: any) => {
+    setSelectedIncident(incident);
+    fetchReportDetails(incident.id);
   };
 
   return (
@@ -279,9 +352,9 @@ const Profile: React.FC = () => {
         <section className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
           <h2 className="text-md font-semibold mb-3 text-raksha-secondary">Your Reported Incidents</h2>
           
-          {reportedIncidents.length > 0 ? (
+          {userReports.length > 0 ? (
             <div className="divide-y divide-gray-100">
-              {reportedIncidents.map((incident) => (
+              {userReports.map((incident) => (
                 <div key={incident.id} className="py-3 flex justify-between items-center">
                   <div>
                     <div className="flex items-center">
@@ -304,7 +377,7 @@ const Profile: React.FC = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setSelectedIncident(incident)}
+                      onClick={() => handleViewDetails(incident)}
                     >
                       View Details
                     </Button>
@@ -370,37 +443,69 @@ const Profile: React.FC = () => {
         
         {/* Incident Details Dialog */}
         {selectedIncident && (
-          <Dialog open={!!selectedIncident} onOpenChange={() => setSelectedIncident(null)}>
+          <Dialog open={!!selectedIncident} onOpenChange={() => {
+            setSelectedIncident(null);
+            setReportDetails(null);
+          }}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Incident Details</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium">Type</h3>
-                  <p>{selectedIncident.type}</p>
+              {isLoadingDetails ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-raksha-primary"></div>
                 </div>
-                <div>
-                  <h3 className="font-medium">Location</h3>
-                  <p>{selectedIncident.location}</p>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-medium">Type</h3>
+                    <p>{selectedIncident.type}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Location</h3>
+                    <p>{reportDetails?.location || selectedIncident.location}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Description</h3>
+                    <p className="text-sm text-gray-600">{reportDetails?.description || 'No description available'}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Date</h3>
+                    <p>{new Date(reportDetails?.timestamp || selectedIncident.date).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Status</h3>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      selectedIncident.status === 'Verified' 
+                        ? 'bg-green-100 text-green-800' 
+                        : selectedIncident.status === 'Resolved'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {reportDetails?.status || selectedIncident.status}
+                    </span>
+                  </div>
+                  {reportDetails?.evidence && reportDetails.evidence.length > 0 && (
+                    <div>
+                      <h3 className="font-medium mb-2">Evidence</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {reportDetails.evidence.map((evidence: string, index: number) => (
+                          <div key={index} className="relative border rounded-lg p-2">
+                            <a 
+                              href={`${API_BASE_URL}/evidence/${evidence}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-raksha-primary text-sm hover:underline"
+                            >
+                              View Evidence {index + 1}
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <h3 className="font-medium">Date</h3>
-                  <p>{selectedIncident.date}</p>
-                </div>
-                <div>
-                  <h3 className="font-medium">Status</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    selectedIncident.status === 'Verified' 
-                      ? 'bg-green-100 text-green-800' 
-                      : selectedIncident.status === 'Resolved'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {selectedIncident.status}
-                  </span>
-                </div>
-              </div>
+              )}
             </DialogContent>
           </Dialog>
         )}

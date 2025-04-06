@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { api } from '@/services/api';
-
+const API_BASE_URL = 'http://127.0.0.1:5000';
 interface Evidence {
   id: string;
   type: 'photo' | 'video' | 'audio' | 'file';
@@ -37,7 +37,7 @@ const Report: React.FC = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaChunksRef = useRef<Blob[]>([]);
   
-  const handleSubmitReport = (e: React.FormEvent) => {
+  const handleSubmitReport = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!reportType) {
@@ -49,17 +49,70 @@ const Report: React.FC = () => {
       toast.error("Location is required");
       return;
     }
+
+    if (!description) {
+      toast.error("Description is required");
+      return;
+    }
     
-    toast.success("Report submitted successfully!");
-    // In a real app, this would send the data to a server
-    
-    // Reset form
-    setReportType('');
-    setLocation('');
-    setDescription('');
-    setMediaPreview(null);
-    setMediaType(null);
-  };
+    try {
+      const formData = new FormData();
+      formData.append('description', description);
+      formData.append('location', location);
+
+      // Process evidence files sequentially
+      for (const evidence of evidences) {
+        // Convert data URLs back to files for photos
+        if (evidence.type === 'photo' && evidence.url.startsWith('data:image')) {
+          const blob = await fetch(evidence.url).then(r => r.blob());
+          formData.append('evidence', blob, `photo_${Date.now()}.jpg`);
+        }
+        // For video/audio blobs
+        else if (evidence.url.startsWith('blob:')) {
+          const response = await fetch(evidence.url);
+          const blob = await response.blob();
+          const extension = evidence.type === 'video' ? '.webm' : '.wav';
+          formData.append('evidence', blob, `${evidence.type}_${Date.now()}${extension}`);
+        }
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/report`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit report');
+      }
+
+      const result = await response.json();
+      
+      // Add new report to localStorage without affecting sample reports
+      const userReports = JSON.parse(localStorage.getItem('userReports') || '[]');
+      userReports.push({
+        id: result.id,
+        type: reportType,
+        location: location,
+        date: new Date().toISOString(),
+        status: 'Pending'
+      });
+      localStorage.setItem('userReports', JSON.stringify(userReports));
+
+      toast.success("Report submitted successfully!");
+      
+      // Reset form
+      setReportType('');
+      setLocation('');
+      setDescription('');
+      setEvidences([]);
+      setMediaPreview(null);
+      setMediaType(null);
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to submit report');
+    }
+};
 
   const handleGetLocation = () => {
     toast.info("Getting your current location...");
