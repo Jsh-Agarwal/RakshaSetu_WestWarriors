@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { createUser, updateUser } from './database.js';
-import { router as authRoutes, authenticateToken } from './auth.js';
+import { router as authRoutes } from './auth.js';
 import * as turf from '@turf/turf';
 import polyline from '@mapbox/polyline';
 import { fileURLToPath } from 'url';
@@ -25,6 +25,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Add auth routes
+app.use('/auth', authRoutes);
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });

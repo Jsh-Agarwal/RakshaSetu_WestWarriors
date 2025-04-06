@@ -13,7 +13,7 @@ import NotFound from "./pages/NotFound";
 import Incidents from "./pages/Incidents";
 import CrimeTrends from "./pages/CrimeTrends";
 import BottomNavigation from "./components/BottomNavigation";
-import SimpleMap from "./pages/SimpleMap";
+import Auth from "./pages/Auth";
 
 const queryClient = new QueryClient();
 
@@ -33,7 +33,7 @@ const App = () => (
             <Route path="/incidents" element={<Incidents />} />
             <Route path="/trends" element={<CrimeTrends />} />
             <Route path="*" element={<NotFound />} />
-            <Route path="/simple-map" element={<SimpleMap />} />
+            <Route path="/auth" element={<Auth />} />
           </Routes>
           <BottomNavigation />
         </div>

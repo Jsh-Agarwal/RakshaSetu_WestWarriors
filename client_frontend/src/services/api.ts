@@ -25,6 +25,28 @@ interface SOS {
   id: string;
 }
 
+interface AuthResponse {
+  token: string;
+  message: string;
+}
+
+interface UserData {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  aadhaar: string;
+  password: string;
+}
+
+interface UserProfile {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  aadhaar: string;
+}
+
 export const api = {
   // Mark a new location
   async markLocation(location: Location) {
@@ -231,5 +253,82 @@ export const api = {
       console.error("Error sending SOS:", error.message);
       throw error;
     }
-  }
+  },
+
+  // Authentication endpoints
+  login: async (email: string, password: string): Promise<AuthResponse> => {
+    try {
+      const response = await axios.post(`${baseUrl}/auth/login`, { email, password });
+      return response.data;
+    } catch (error: any) {
+      if (error.response) {
+        throw error;
+      }
+      throw new Error('Network error occurred');
+    }
+  },
+
+  signup: async (userData: UserData): Promise<AuthResponse> => {
+    try {
+      const response = await axios.post(`${baseUrl}/auth/signup`, userData);
+      return response.data;
+    } catch (error: any) {
+      if (error.response) {
+        throw error;
+      }
+      throw new Error('Network error occurred');
+    }
+  },
+
+  async sendOtp(email: string): Promise<{ message: string }> {
+    try {
+      const response = await axios.post(`${baseUrl}/send-otp`, { email });
+      return response.data;
+    } catch (error) {
+      console.error("OTP sending error:", error);
+      throw error;
+    }
+  },
+
+  async verifyOtp(email: string, otp: string): Promise<AuthResponse> {
+    try {
+      const response = await axios.post(`${baseUrl}/verify-otp`, { email, otp });
+      return response.data;
+    } catch (error) {
+      console.error("OTP verification error:", error);
+      throw error;
+    }
+  },
+
+  logout: async () => {
+    try {
+      // Clear all auth-related data
+      localStorage.clear();
+      return { message: 'Logged out successfully' };
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    }
+  },
+
+  getUserProfile: async (): Promise<UserProfile> => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await axios.get(`${baseUrl}/auth/profile`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.response) {
+        throw error;
+      }
+      throw new Error('Network error occurred');
+    }
+  },
 };

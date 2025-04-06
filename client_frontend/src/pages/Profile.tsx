@@ -20,6 +20,8 @@ import {
   FileCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { api } from '@/services/api';
 import { 
   Dialog, 
   DialogContent, 
@@ -39,18 +41,36 @@ const reportedIncidents = [
 ];
 
 const Profile: React.FC = () => {
+  const navigate = useNavigate();
   const [userData, setUserData] = useState({
-    name: "John Doe",
-    phone: "+91 9876543210",
-    email: "john.doe@example.com",
-    address: "123 Main St, New Delhi",
-    aadhaar: "XXXX-XXXX-1234" // Added Aadhaar field
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+    aadhaar: ""
   });
-  
   const [editData, setEditData] = useState({ ...userData });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
   const [currentLocation, setCurrentLocation] = useState("Detecting location...");
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const profile = await api.getUserProfile();
+        setUserData(profile);
+        setEditData(profile);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+        toast.error('Failed to load profile data');
+        setIsLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
   
   useEffect(() => {
     // Get current location
@@ -79,19 +99,37 @@ const Profile: React.FC = () => {
     }
   }, []);
   
-  const handleLogout = () => {
-    toast.info("Logout functionality would be implemented in a full app");
+  const handleLogout = async () => {
+    try {
+      // Clear all auth-related data
+      localStorage.clear();
+      // Show success message
+      toast.success('Logged out successfully');
+      // Navigate to auth page
+      navigate('/auth');
+      // Force a page reload to clear any cached state
+      window.location.reload();
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Failed to logout');
+    }
   };
   
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editData.aadhaar || editData.aadhaar.trim() === '') {
       toast.error("Aadhaar number is mandatory");
       return;
     }
     
-    setUserData({ ...editData });
-    setIsDialogOpen(false);
-    toast.success("Profile updated successfully");
+    try {
+      // TODO: Add API call to update profile
+      setUserData({ ...editData });
+      setIsDialogOpen(false);
+      toast.success("Profile updated successfully");
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
+    }
   };
 
   return (
@@ -104,7 +142,7 @@ const Profile: React.FC = () => {
           <div className="w-20 h-20 rounded-full bg-raksha-secondary/10 flex items-center justify-center mb-3">
             <UserCircle size={50} className="text-raksha-secondary" />
           </div>
-          <h1 className="text-xl font-bold text-raksha-secondary">{userData.name}</h1>
+          <h1 className="text-xl font-bold text-raksha-secondary">{userData.name || 'Loading...'}</h1>
           <p className="text-gray-600 text-sm">{currentLocation}</p>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -154,6 +192,7 @@ const Profile: React.FC = () => {
                       value={editData.email}
                       onChange={(e) => setEditData({...editData, email: e.target.value})}
                       className="pl-10"
+                      disabled
                     />
                   </div>
                 </div>
@@ -209,28 +248,28 @@ const Profile: React.FC = () => {
               <Phone size={18} className="text-gray-500 mr-3" />
               <div>
                 <p className="text-xs text-gray-500">Phone</p>
-                <p className="text-sm">{userData.phone}</p>
+                <p className="text-sm">{userData.phone || 'Loading...'}</p>
               </div>
             </div>
             <div className="flex items-center">
               <Mail size={18} className="text-gray-500 mr-3" />
               <div>
                 <p className="text-xs text-gray-500">Email</p>
-                <p className="text-sm">{userData.email}</p>
+                <p className="text-sm">{userData.email || 'Loading...'}</p>
               </div>
             </div>
             <div className="flex items-center">
               <MapPin size={18} className="text-gray-500 mr-3" />
               <div>
                 <p className="text-xs text-gray-500">Address</p>
-                <p className="text-sm">{userData.address}</p>
+                <p className="text-sm">{userData.address || 'Loading...'}</p>
               </div>
             </div>
             <div className="flex items-center">
               <FileCheck size={18} className="text-gray-500 mr-3" />
               <div>
                 <p className="text-xs text-gray-500">Aadhaar Number</p>
-                <p className="text-sm">{userData.aadhaar}</p>
+                <p className="text-sm">{userData.aadhaar || 'Loading...'}</p>
               </div>
             </div>
           </div>
