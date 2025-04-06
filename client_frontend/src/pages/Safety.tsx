@@ -3,9 +3,10 @@ import AppHeader from '@/components/AppHeader';
 import EmergencySOS from '@/components/EmergencySOS';
 import SafetyScore from '@/components/SafetyScore';
 import SafetyTips from '@/components/SafetyTips';
+import EmergencyContacts from '@/components/EmergencyContacts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Share2, UserCircle, Bell, Route, Shield, AlertCircle, MapPin, Check, Search } from 'lucide-react';
+import { Share2, UserCircle, Bell, Route, Shield, AlertCircle, MapPin, Check, Search, Phone, Building2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
   Dialog, 
@@ -343,6 +344,20 @@ const Safety: React.FC = () => {
     console.log('Selected coordinates:', coordinates);
   };
 
+  const hospitals = [
+    { name: 'Civil Hospital', phone: '0261-2240000', location: 'Civil Hospital, Surat' },
+    { name: 'New Civil Hospital', phone: '0261-2244444', location: 'New Civil Hospital, Surat' },
+    { name: 'SMIMER Hospital', phone: '0261-2463333', location: 'SMIMER Hospital, Surat' },
+    { name: 'Government Hospital', phone: '0261-2470000', location: 'Government Hospital, Surat' }
+  ];
+
+  const policeStations = [
+    { name: 'Surat Police Control Room', phone: '100', location: 'Surat Police Headquarters' },
+    { name: 'Athwa Police Station', phone: '0261-2471000', location: 'Athwa Police Station, Surat' },
+    { name: 'Katargam Police Station', phone: '0261-2481000', location: 'Katargam Police Station, Surat' },
+    { name: 'Adajan Police Station', phone: '0261-2491000', location: 'Adajan Police Station, Surat' }
+  ];
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <AppHeader title="Safety" />
@@ -355,6 +370,11 @@ const Safety: React.FC = () => {
         
         {/* Safety Score */}
         <SafetyScore score={85} className="mb-6" />
+        
+        {/* Emergency Contacts */}
+        <section className="mb-6">
+          <EmergencyContacts />
+        </section>
         
         {/* Share Location */}
         <section className="mb-6">
@@ -579,12 +599,12 @@ const Safety: React.FC = () => {
           </div>
         </section>
         
-        {/* Emergency Services */}
+        {/* Emergency Services
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 text-raksha-secondary">Nearby Emergency Services</h2>
           <div className="space-y-4">
             {/* Hospitals */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+            {/* <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
               <h3 className="text-md font-medium mb-3">Hospitals</h3>
               {nearbyHospitals.length > 0 ? (
                 <div className="space-y-3">
@@ -614,10 +634,10 @@ const Safety: React.FC = () => {
                   <p className="text-sm">No nearby hospitals found</p>
                 </div>
               )}
-            </div>
-
+            </div> */} 
+{/*
             {/* Police Stations */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+            {/* <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
               <h3 className="text-md font-medium mb-3">Police Stations</h3>
               {nearbyPoliceStations.length > 0 ? (
                 <div className="space-y-3">
@@ -629,8 +649,8 @@ const Safety: React.FC = () => {
                           <span className="text-sm font-medium">{station.name}</span>
                           <div className="text-xs text-gray-500">{station.distance} km away</div>
                           <div className="text-xs text-gray-400">{station.address}</div>
-                        </div>
-                      </div>
+                        </div> */} 
+                      {/* </div>
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -649,7 +669,7 @@ const Safety: React.FC = () => {
               )}
             </div>
           </div>
-        </section>
+        </section> */}
         
         {/* Safe Routes */}
         <section className="mb-6">
@@ -804,6 +824,60 @@ const Safety: React.FC = () => {
         
         {/* Safety Tips */}
         <SafetyTips />
+
+        {/* Hospitals Section */}
+        <section className="mb-6">
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center mb-4">
+                <Building2 className="text-red-500 mr-2" size={24} />
+                <h2 className="text-xl font-semibold">Hospitals</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {hospitals.map((hospital, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <h3 className="font-medium">{hospital.name}</h3>
+                      <p className="text-sm text-gray-600">{hospital.location}</p>
+                    </div>
+                    <a 
+                      href={`tel:${hospital.phone}`}
+                      className="flex items-center bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition-colors"
+                    >
+                      <Phone size={16} className="mr-1" />
+                      {hospital.phone}
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Police Stations Section */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center mb-4">
+                <ShieldCheck className="text-blue-500 mr-2" size={24} />
+                <h2 className="text-xl font-semibold">Police Stations</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {policeStations.map((station, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <h3 className="font-medium">{station.name}</h3>
+                      <p className="text-sm text-gray-600">{station.location}</p>
+                    </div>
+                    <a 
+                      href={`tel:${station.phone}`}
+                      className="flex items-center bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      <Phone size={16} className="mr-1" />
+                      {station.phone}
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );

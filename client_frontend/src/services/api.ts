@@ -47,6 +47,22 @@ interface UserProfile {
   aadhaar: string;
 }
 
+interface LocationResponse {
+  location: Location;
+}
+
+interface Incident {
+  id: string;
+  type: string;
+  location: {
+    lat: number;
+    lng: number;
+  };
+  description: string;
+  severity: string;
+  timestamp: string;
+}
+
 export const api = {
   // Mark a new location
   async markLocation(location: Location) {
@@ -329,6 +345,32 @@ export const api = {
         throw error;
       }
       throw new Error('Network error occurred');
+    }
+  },
+
+  ltoc: async (locationString: string): Promise<LocationResponse> => {
+    try {
+      const response = await axios.post(`${baseUrl}/l-to-c`, {
+        location: locationString
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error in ltoc:", error);
+      throw error;
+    }
+  },
+
+  getIncidents: async (): Promise<Incident[]> => {
+    try {
+      const response = await fetch(`${baseUrl}/incidents`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch incidents');
+      }
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching incidents:', error);
+      throw error;
     }
   },
 };

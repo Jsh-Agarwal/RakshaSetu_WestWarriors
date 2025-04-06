@@ -86,8 +86,7 @@ const AppSidebar: React.FC<SidebarProps> = ({ isMobileOpen, setIsMobileOpen }) =
         <SidebarFooter className="border-t px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="text-xs text-muted-foreground">
-              <p>RakshaSetu Admin v1.0</p>
-              <p>© 2025 RakshaSetu</p>
+              
             </div>
           </div>
         </SidebarFooter>
@@ -131,11 +130,11 @@ const SidebarNavigation = () => {
       path: "/fake-detection",
       badge: "3",
     },
-    {
-      title: "Historical Data",
-      icon: <TimerReset className="h-4 w-4" />,
-      path: "/historical-data",
-    },
+    // {
+    //   title: "Historical Data",
+    //   icon: <TimerReset className="h-4 w-4" />,
+    //   path: "/historical-data",
+    // },
     {
       title: "Alerts & SOS",
       icon: <Siren className="h-4 w-4" />,
@@ -147,11 +146,7 @@ const SidebarNavigation = () => {
       icon: <Users className="h-4 w-4" />,
       path: "/users",
     },
-    {
-      title: "Settings",
-      icon: <Settings className="h-4 w-4" />,
-      path: "/settings",
-    },
+
   ];
 
   return (

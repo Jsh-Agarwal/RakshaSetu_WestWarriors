@@ -22,14 +22,14 @@ const Dashboard: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
+          {/* <Button variant="outline" size="sm">
             <FileText className="mr-2 h-4 w-4" />
             Export Reports
-          </Button>
-          <Button size="sm">
+          </Button> */}
+          {/* <Button size="sm">
             <Activity className="mr-2 h-4 w-4" />
             View Activity Log
-          </Button>
+          </Button> */}
         </div>
       </div>
 

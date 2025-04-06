@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from 'sonner';
 import QuickReportForm from '@/components/QuickReportForm';
 import CrimeTrendsChart from '@/components/CrimeTrendsChart';
+import CrimeMap from '@/components/CrimeMap';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -148,7 +149,7 @@ const Home: React.FC = () => {
         {/* Emergency SOS Button */}
         <EmergencySOS className="mb-6" />
         
-        {/* Interactive Crime Map */}
+        {/* Interactive Crime Map
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-raksha-secondary">Crime Map</h2>
@@ -167,7 +168,21 @@ const Home: React.FC = () => {
               currentLocation={currentLocation}
             />
           </div>
-        </div>
+        </div> */}
+        
+        {/* Crime Map Section */}
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Crime Map</h2>
+            <Button variant="outline" size="sm">
+              <MapPin className="mr-2" size={16} />
+              View All
+            </Button>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <CrimeMap />
+          </div>
+        </section>
         
         {/* Recent Crime Incidents */}
         <div className="mb-6">
