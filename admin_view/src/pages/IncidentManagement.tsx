@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -227,6 +228,7 @@ const IncidentManagement: React.FC = () => {
             <Button variant="outline" size="icon">
               <Filter className="h-4 w-4" />
             </Button>
+            <Button>Add New</Button>
           </div>
         </CardHeader>
         <CardContent>

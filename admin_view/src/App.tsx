@@ -8,6 +8,7 @@ import MainLayout from "./components/layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import LiveTracking from "./pages/LiveTracking";
 import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import IncidentManagement from "./pages/IncidentManagement";
 import SearchReports from "./pages/SearchReports";
@@ -55,12 +56,7 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route 
-              path="/login" 
-              element={
-                isAuthenticated ? <Navigate to="/" replace /> : <Login />
-              } 
-            />
+            <Route path="/login" element={<Login />} />
             
             <Route 
               path="/" 
@@ -79,6 +75,7 @@ const App = () => {
               <Route path="historical-data" element={<HistoricalData />} />
               <Route path="alerts" element={<AlertsAndSOS />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="settings" element={<Settings />} />
               <Route path="profile" element={<Profile />} />
               
               {/* Dashboard stat card detail routes */}

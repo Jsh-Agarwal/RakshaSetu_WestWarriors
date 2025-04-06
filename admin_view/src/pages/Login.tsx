@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useNavigate } from "react-router-dom";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -46,7 +46,6 @@ const Login: React.FC = () => {
           description: "Welcome back to RakshaSetu"
         });
         
-        // Redirect to dashboard
         navigate("/");
       } else {
         setError("Invalid email or password");

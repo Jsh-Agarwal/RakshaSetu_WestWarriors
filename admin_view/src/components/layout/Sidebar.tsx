@@ -1,3 +1,4 @@
+
 import React from "react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,7 @@ import {
   LineChart,
   List,
   Search,
+  Settings,
   Shield,
   Siren,
   TimerReset,
@@ -144,7 +146,12 @@ const SidebarNavigation = () => {
       title: "User Management",
       icon: <Users className="h-4 w-4" />,
       path: "/users",
-    }
+    },
+    {
+      title: "Settings",
+      icon: <Settings className="h-4 w-4" />,
+      path: "/settings",
+    },
   ];
 
   return (
