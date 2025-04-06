@@ -15,3 +15,6 @@ Safest Shortest Path:
 
 Police Patroling Path:
 ![WhatsApp Image 2025-04-06 at 10 32 08_90f2e40a](https://github.com/user-attachments/assets/776b53fe-6bc0-4d58-8c40-754434d672a0)
+
+Incident reporting & First Response
+![WhatsApp Image 2025-04-06 at 10 45 10_0aef4414](https://github.com/user-attachments/assets/f7ffc058-32bd-4709-a91f-2655c07ad560)
